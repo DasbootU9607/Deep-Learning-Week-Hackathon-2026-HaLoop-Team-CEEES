@@ -471,3 +471,71 @@ Exit criteria: end-to-end demo succeeds twice consecutively.
 4. Trigger Dead Man's Switch -> changes revert.
 
 Narration line: "Speed from AI, control from governance."
+
+---
+
+## 15. Current Implementation Status (as of March 2, 2026)
+
+### What this plugin is about
+
+This VS Code plugin is a governed AI coding assistant. It gives developers AI speed for code generation, but enforces safety controls before changes are applied.
+
+Core idea:
+
+1. Developer asks AI for a code task.
+2. Plugin gathers local coding context.
+3. Backend returns structured plan/diff + risk metadata.
+4. Plugin previews changes.
+5. High-risk actions are intercepted and require approval.
+6. Only approved changes can be applied.
+7. Dead Man's Switch can roll back AI session changes.
+
+### What has been completed so far
+
+1. VS Code extension project scaffolded in `ide-plugin/` with TypeScript strict mode.
+2. Commands implemented and wired:
+   - `aiGov.openChat`
+   - `aiGov.runTask`
+   - `aiGov.deadManSwitch`
+3. React webview chat UI implemented with:
+   - chat input/submit
+   - status pill
+   - plan summary
+   - file-change list
+   - action row (`Apply`, `Cancel`, `Dead Man's Switch`)
+   - event log panel
+4. Core M2 modules implemented:
+   - explicit finite state machine
+   - context collector (active file, selection, open tabs, branch, snippets)
+   - deterministic local risk scoring
+   - safe apply engine with pre-change snapshots
+   - session manifest persistence
+   - rollback manager with uncommitted-file guardrails
+5. Backend integration clients implemented with runtime schema validation (`zod`):
+   - generate plan endpoint client
+   - approval request endpoint client
+   - approval decision polling client
+6. High-risk interception flow implemented:
+   - local + backend risk merge
+   - approval wait state
+   - approved/denied transitions
+   - apply disabled until allowed
+7. Security guardrails implemented in plugin flow:
+   - no automatic execution of generated shell commands
+   - explicit user click required for apply and rollback
+   - basic secret redaction in logs
+8. Integration handoff doc created:
+   - `Planning/ide-plugin-integration.md` (endpoint list, config keys, backend contracts)
+9. Automated tests added and passing:
+   - `riskGate` tests
+   - `stateMachine` tests
+   - `rollbackManager` tests
+10. Local verification complete:
+    - `npm run build` passes
+    - `npm test` passes
+
+### Remaining for full team end-to-end
+
+1. Wire plugin to real backend services and dashboard approvals.
+2. Connect true realtime approval events (Supabase channel path) in addition to polling fallback.
+3. Run full golden-path integration test with M1/M3/M4.
