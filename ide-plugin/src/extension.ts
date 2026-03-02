@@ -455,7 +455,8 @@ function toPlanView(plan: GeneratePlanResponse): PlanView {
 }
 
 function hasBackendConfigured(): boolean {
-  const backendUrl = String(vscode.workspace.getConfiguration("aiGov").get<string>("backendUrl") ?? "").trim();
+  const rawBackendUrl = String(vscode.workspace.getConfiguration("aiGov").get<string>("backendUrl") ?? "").trim();
+  const backendUrl = normalizeBackendUrl(rawBackendUrl);
   return backendUrl.length > 0;
 }
 
@@ -467,4 +468,12 @@ function redactSecrets(value: string): string {
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeBackendUrl(value: string): string {
+  const trimmed = value.replace(/\/+$/, "");
+  if (trimmed.endsWith("/api")) {
+    return trimmed.slice(0, -4);
+  }
+  return trimmed;
 }

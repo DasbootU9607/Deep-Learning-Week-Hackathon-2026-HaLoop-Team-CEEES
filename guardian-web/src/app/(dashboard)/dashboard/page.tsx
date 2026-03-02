@@ -54,6 +54,8 @@ export default function DashboardPage() {
   const { data: allCRs, isLoading } = useQuery({
     queryKey: ["cr-list"],
     queryFn: () => fetchCRList(),
+    staleTime: 30_000,
+    refetchInterval: 2_000,
   });
   const { isIncidentMode } = useIncidentMode();
 

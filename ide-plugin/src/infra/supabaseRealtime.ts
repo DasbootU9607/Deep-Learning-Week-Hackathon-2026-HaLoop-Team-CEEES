@@ -180,7 +180,8 @@ export class SupabaseRealtimeClient {
   }
 
   private getBackendUrl(): string {
-    return String(vscode.workspace.getConfiguration("aiGov").get<string>("backendUrl") ?? "").trim();
+    const raw = String(vscode.workspace.getConfiguration("aiGov").get<string>("backendUrl") ?? "").trim();
+    return normalizeBackendUrl(raw);
   }
 
   private getHeaders(): Record<string, string> {
@@ -191,4 +192,12 @@ export class SupabaseRealtimeClient {
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeBackendUrl(value: string): string {
+  const trimmed = value.replace(/\/+$/, "");
+  if (trimmed.endsWith("/api")) {
+    return trimmed.slice(0, -4);
+  }
+  return trimmed;
 }

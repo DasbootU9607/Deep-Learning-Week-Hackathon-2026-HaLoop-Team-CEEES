@@ -13,7 +13,8 @@ export class AIClient {
       return buildMockPlan(request);
     }
 
-    const response = await fetch(`${backendUrl}/generate-plan`, {
+    const endpoint = `${backendUrl}/generate-plan`;
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -23,7 +24,7 @@ export class AIClient {
     });
 
     if (!response.ok) {
-      throw new Error(`Generate plan failed: ${response.status} ${response.statusText}`);
+      throw new Error(`Generate plan failed at ${endpoint}: ${response.status} ${response.statusText}`);
     }
 
     const payload: unknown = await response.json();
@@ -74,10 +75,19 @@ function buildMockPlan(request: GeneratePlanRequest): GeneratePlanResponse {
 
 function getConfig(): { backendUrl: string; apiKey: string } {
   const config = vscode.workspace.getConfiguration("aiGov");
+  const rawBackendUrl = String(config.get<string>("backendUrl") ?? "").trim();
   return {
-    backendUrl: String(config.get<string>("backendUrl") ?? "").trim(),
+    backendUrl: normalizeBackendUrl(rawBackendUrl),
     apiKey: String(config.get<string>("apiKey") ?? "").trim()
   };
+}
+
+function normalizeBackendUrl(value: string): string {
+  const trimmed = value.replace(/\/+$/, "");
+  if (trimmed.endsWith("/api")) {
+    return trimmed.slice(0, -4);
+  }
+  return trimmed;
 }
 
 function toErrorMessage(error: unknown): string {

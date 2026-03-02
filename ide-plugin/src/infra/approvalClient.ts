@@ -56,14 +56,15 @@ export class ApprovalClient {
       return request;
     }
 
-    const response = await fetch(`${backendUrl}/approvals`, {
+    const endpoint = `${backendUrl}/approvals`;
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify(request)
     });
 
     if (!response.ok) {
-      throw new Error(`Create approval request failed: ${response.status} ${response.statusText}`);
+      throw new Error(`Create approval request failed at ${endpoint}: ${response.status} ${response.statusText}`);
     }
 
     const payload: unknown = await response.json();
@@ -170,7 +171,8 @@ export class ApprovalClient {
       return this.localStore.get(approvalId)?.decision;
     }
 
-    const response = await fetch(`${backendUrl}/approvals/${approvalId}/decision`, {
+    const endpoint = `${backendUrl}/approvals/${approvalId}/decision`;
+    const response = await fetch(endpoint, {
       method: "GET",
       headers: this.getHeaders()
     });
@@ -180,7 +182,7 @@ export class ApprovalClient {
     }
 
     if (!response.ok) {
-      throw new Error(`Poll approval failed: ${response.status} ${response.statusText}`);
+      throw new Error(`Poll approval failed at ${endpoint}: ${response.status} ${response.statusText}`);
     }
 
     const payload: unknown = await response.json();
@@ -189,7 +191,8 @@ export class ApprovalClient {
   }
 
   private getBackendUrl(): string {
-    return String(vscode.workspace.getConfiguration("aiGov").get<string>("backendUrl") ?? "").trim();
+    const raw = String(vscode.workspace.getConfiguration("aiGov").get<string>("backendUrl") ?? "").trim();
+    return normalizeBackendUrl(raw);
   }
 
   private getRequestedBy(): string {
@@ -207,4 +210,12 @@ export class ApprovalClient {
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeBackendUrl(value: string): string {
+  const trimmed = value.replace(/\/+$/, "");
+  if (trimmed.endsWith("/api")) {
+    return trimmed.slice(0, -4);
+  }
+  return trimmed;
 }
