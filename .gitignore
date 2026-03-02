@@ -120,3 +120,7 @@ pyrightconfig.json
 *~
 .DS_Store
 *.pyc
+
+# Keep frontend source libs tracked
+!guardian-web/src/lib/
+!guardian-web/src/lib/**

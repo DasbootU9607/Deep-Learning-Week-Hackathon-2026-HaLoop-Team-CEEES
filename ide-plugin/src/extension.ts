@@ -23,7 +23,7 @@ import { PlanView, PluginUiState } from "./webview/uiState";
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger();
   const gitClient = new GitClient();
-  const realtimeClient = new SupabaseRealtimeClient();
+  const realtimeClient = new SupabaseRealtimeClient(logger);
   const pollIntervalMs = Number(vscode.workspace.getConfiguration("aiGov").get<number>("pollIntervalMs") ?? 3000);
 
   const host = new ExtensionHost(

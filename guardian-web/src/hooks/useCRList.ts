@@ -9,5 +9,6 @@ export function useCRList(filters?: CRFilters) {
     queryKey: ["cr-list", filters],
     queryFn: () => fetchCRList(filters),
     staleTime: 30_000,
+    refetchInterval: 2_000,
   });
 }

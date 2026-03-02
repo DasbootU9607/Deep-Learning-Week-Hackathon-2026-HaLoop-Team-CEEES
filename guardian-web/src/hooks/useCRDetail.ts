@@ -8,6 +8,7 @@ export function useCRDetail(id: string) {
     queryKey: ["cr-detail", id],
     queryFn: () => fetchCRDetail(id),
     staleTime: 30_000,
+    refetchInterval: 2_000,
     enabled: !!id,
   });
 }

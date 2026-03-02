@@ -21,15 +21,12 @@ export function ApprovalPanel({ cr }: ApprovalPanelProps) {
   const { isIncidentMode } = useIncidentMode();
 
   const needsDualApproval = cr.risk_level === "high";
-  const approvalsMet = cr.approvals.filter((a) => a.action === "approved").length >= cr.required_approvals;
   const canAct = cr.status === "pending_approval" || cr.status === "changes_requested";
 
   const disabledReason = isIncidentMode
     ? "Approvals are suspended during Incident Mode"
     : !canAct
     ? "This CR is not in a state that accepts approvals"
-    : needsDualApproval && !approvalsMet
-    ? `High-risk CR requires ${cr.required_approvals} approvals (${cr.approvals.filter((a) => a.action === "approved").length} so far)`
     : null;
 
   const approveDisabled = !!disabledReason || approve.isPending;
