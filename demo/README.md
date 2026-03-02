@@ -1,79 +1,84 @@
-# Plugin + Dashboard Demo Kit
+# Demo Runbook
 
-This folder is a ready demo runbook for showing the AI Governance VS Code plugin and the Guardian dashboard working together.
+This folder contains the practical runbook for demonstrating plugin + dashboard integration.
 
-## What This Demo Shows
+## What The Demo Covers
 
-1. Low-risk plugin flow (no approval needed).
-2. High-risk plugin flow (approval ticket appears on dashboard).
-3. Reviewer approval on dashboard unblocks plugin apply.
-4. Reviewer rejection on dashboard denies plugin action.
-5. Incident mode blocks approval actions with a server-side warning.
+1. Low-risk flow with no approval.
+2. High-risk flow that creates a pending approval.
+3. Approve path that unblocks plugin apply.
+4. Reject path that denies plugin apply.
+5. Incident mode blocking approval actions.
+
+Detailed scenario script:
+
+- `USECASES.md`
 
 ## Prerequisites
 
-- Node.js + npm installed.
-- VS Code installed.
-- Dependencies installed:
-  - `cd guardian-web && npm ci`
-  - `cd ide-plugin && npm ci`
+- Root setup completed (`README.md`)
+- `guardian-web` running on `http://localhost:3000`
+- `ide-plugin` built
+- VS Code extension development host running
 
-## Start Services
+## Fast Start
 
-1. Start dashboard/backend:
+From repo root:
 
 ```bash
-cd guardian-web
-npm run dev
+bash demo/scripts/start-dashboard.sh
 ```
 
-2. Confirm dashboard URL (usually `http://localhost:3000`).
-
-3. Build plugin:
+In another terminal:
 
 ```bash
 cd ide-plugin
 npm run build
 ```
 
-## Run Plugin In VS Code
-
-Use one of these methods.
-
-### Method A: Extension Development Host (recommended)
-
-1. Open `ide-plugin/` in VS Code.
-2. Press `F5` and run `Extension` debug target.
-3. In the new Extension Development Host window, open the repository root.
-4. Set workspace settings using `demo/vscode-settings.sample.json` values.
-
-### Method B: CLI
+Then start extension host:
 
 ```bash
-code --extensionDevelopmentPath "$(pwd)/ide-plugin" "$(pwd)"
+bash demo/scripts/open-plugin-dev-host.sh
 ```
 
-Run this command from repository root.
+If `code` CLI is missing, open `ide-plugin/` in VS Code and press `F5` manually.
 
-## Demo Script
+## Plugin Settings For Demo
 
-Follow `demo/USECASES.md` from top to bottom.
+Use:
+
+- `demo/vscode-settings.sample.json`
+
+Minimum required:
+
+```json
+{
+  "aiGov.backendUrl": "http://localhost:3000"
+}
+```
 
 ## Reset Demo State
-
-If dashboard data gets noisy, reset to clean mock baseline:
 
 ```bash
 bash demo/scripts/reset-demo-state.sh
 ```
 
+This resets local integration store data.
+If needed, also delete `guardian-web/.data/backend-mirror.sqlite`.
+
 ## Optional Automated Validation
 
-After starting `guardian-web` dev server:
+After `guardian-web` is running:
 
 ```bash
 cd guardian-web
 BASE_URL=http://localhost:3000 npm run test:integration
 ```
 
-This verifies approve, reject, realtime decision events, incident blocking, and policy persistence.
+Script requirements:
+
+- `bash`
+- `curl`
+- `jq`
+- `uuidgen`

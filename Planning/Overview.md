@@ -1,3 +1,5 @@
+> Historical planning note. Current implementation docs live in `../README.md`.
+
 # Deep Learning Week Hackathon 2026: Tracks Overview & Analysis
 
 This report provides a comprehensive analysis of the three track options presented for the Deep Learning Week Hackathon 2026. It evaluates each option's core problem, required technical effort, difficulty level, and the unique challenges teams must tackle to deliver a winning solution. 

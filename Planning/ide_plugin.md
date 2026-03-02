@@ -1,3 +1,5 @@
+> Historical planning note. Current implementation docs live in `../README.md`.
+
 # IDE Plugin Implementation Spec (Member 2)
 
 ## 1. Objective

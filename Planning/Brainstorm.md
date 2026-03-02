@@ -1,3 +1,5 @@
+> Historical planning note. Current implementation docs live in `../README.md`.
+
 DLW track:
 
 briefings: 形式：website+插件
@@ -91,4 +93,3 @@ briefings: 形式：website+插件
 | **Collaboration** | **Multi-Collab:** Managers, security, and senior devs can jointly review, comment on, and authorize AI proposals. | **Developer UI:** The chat interface where the dev prompts the AI, reviews the plan, and tracks pending approvals. |
 | **Safety** | **Global Policy Engine:** Define rules (e.g., "Require approval for `package.json` changes") enforced across all plugins. | **Local Dead Man's Switch:** A prominent button to instantly halt AI execution and revert uncommitted local changes. |
 | **Execution** | **Simulated Dry-Runs:** View results of cloud-sandboxed executions before approving them for local application. | **Task Application:** Applies the approved code diffs or executes the approved terminal commands directly in the IDE. |
-

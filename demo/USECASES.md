@@ -1,5 +1,7 @@
 # Live Demo Use Cases
 
+Before running these use cases, complete setup in `demo/README.md`.
+
 Use these in order during the demo.
 
 ## Setup Before Speaking

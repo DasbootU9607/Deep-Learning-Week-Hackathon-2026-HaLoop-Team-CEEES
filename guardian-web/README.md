@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# guardian-web
 
-## Getting Started
+`guardian-web` is the dashboard + backend API service for governance workflows.
 
-First, run the development server:
+It provides:
+
+- CR listing/detail pages
+- approval/reject/request-changes actions
+- incident mode and policy management
+- audit views
+- backend routes used by `ide-plugin`
+- SQLite mirror persistence for backend-compatibility records
+
+## Prerequisites
+
+- Node.js `22.x`
+- npm
+
+Optional for script-based integration checks:
+
+- `bash`
+- `curl`
+- `jq`
+- `uuidgen`
+
+## Install
+
+```bash
+npm ci
+```
+
+## Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Default URL: `http://localhost:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build and Lint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run build
+```
 
-## Learn More
+## Data Storage
 
-To learn more about Next.js, take a look at the following resources:
+### Local integration store
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- file: `.data/integration-store.json`
+- purpose: primary mock CR/policy/audit store used by dashboard workflows
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### SQLite backend mirror
 
-## Deploy on Vercel
+- file: `.data/backend-mirror.sqlite` (default)
+- override: `SQLITE_DB_PATH`
+- purpose: persistence layer for backend compatibility API flows (`/api/ai/plan`, `/api/approvals`, compact audit)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Schema reference:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `../sqlite/migrations/0001_init.sql`
+
+Feature mapping reference:
+
+- `../docs/backend-storage-features.md`
+
+## Key Routes
+
+### Plugin-facing routes
+
+- `POST /generate-plan`
+- `POST /approvals`
+- `GET /approvals/:approvalId/decision`
+- `GET /approvals/:approvalId/events`
+
+### Dashboard API routes
+
+- `GET /api/cr`
+- `GET /api/cr/:id`
+- `POST /api/cr/:id/approve`
+- `POST /api/cr/:id/reject`
+- `POST /api/cr/:id/request-changes`
+- `GET /api/audit`
+- `GET /api/incident`
+- `PUT /api/incident`
+- `GET /api/policy/active`
+- `PUT /api/policy/path-rules`
+
+### Compatibility routes
+
+- `POST /api/ai/plan`
+- `POST /api/approvals`
+- `GET /api/audit?view=compact`
+
+## Integration Test Script
+
+Run with dashboard dev server already up:
+
+```bash
+BASE_URL=http://localhost:3000 npm run test:integration
+```
+
+Script file:
+
+- `scripts/test-integration-flow.sh`
+
+## Reset Local Demo State
+
+From repo root:
+
+```bash
+bash demo/scripts/reset-demo-state.sh
+```
+
+This resets `.data/integration-store.json`.
+If needed, also delete `.data/backend-mirror.sqlite`.

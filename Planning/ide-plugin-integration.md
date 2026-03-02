@@ -1,3 +1,5 @@
+> Historical planning note. Current implementation docs live in `../README.md`.
+
 # IDE Plugin Integration (M2)
 
 This document lists every backend endpoint the VS Code IDE plugin currently requires, where to configure it, and what the backend side must implement.
@@ -103,4 +105,3 @@ The planning spec also calls for Supabase realtime push; to enable true push eve
 - Non-2xx from required endpoints => plugin enters `ERROR` state.
 - Schema mismatch => plugin rejects response and enters `ERROR` with validation detail.
 - Decision timeout (default 10 min) => plugin enters `ERROR`.
-

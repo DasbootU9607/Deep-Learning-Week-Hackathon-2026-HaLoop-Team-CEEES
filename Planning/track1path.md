@@ -1,3 +1,5 @@
+> Historical planning note. Current implementation docs live in `../README.md`.
+
 # Track 1: Safe, Human-Governed AI Coding Agent - Feature Architecture
 
 This table outlines the separation of concerns and features between the Web Dashboard (for governance) and the Local IDE Plugin (for execution).

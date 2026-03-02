@@ -225,7 +225,7 @@ class ExtensionHost implements vscode.Disposable {
       this.addEvent(`Plan ready: ${plan.changes.length} file(s), risk=${this.currentRisk.finalRiskScore}.`);
 
       if (this.currentRisk.decision === "REQUIRE_APPROVAL") {
-        const approval = await this.approvalClient.createApprovalRequest({
+        const approvalResult = await this.approvalClient.createApprovalRequest({
           planId: plan.planId,
           sessionId: this.currentSessionId,
           riskScore: this.currentRisk.finalRiskScore,
@@ -233,6 +233,7 @@ class ExtensionHost implements vscode.Disposable {
           files: plan.changes.map((change) => change.path),
           commandCount: plan.proposedCommands.length
         });
+        const approval = approvalResult.request;
 
         this.currentApprovalId = approval.approvalId;
         this.transition("WAITING_APPROVAL");
@@ -242,7 +243,7 @@ class ExtensionHost implements vscode.Disposable {
         const pending = this.approvalClient.waitForDecision(approval.approvalId);
         this.pendingDecisionCancel = pending.cancel;
 
-        if (!hasBackendConfigured()) {
+        if (approvalResult.source === "local") {
           void this.approvalClient.requestLocalDecision(approval.approvalId);
         }
 
@@ -454,12 +455,6 @@ function toPlanView(plan: GeneratePlanResponse): PlanView {
   };
 }
 
-function hasBackendConfigured(): boolean {
-  const rawBackendUrl = String(vscode.workspace.getConfiguration("aiGov").get<string>("backendUrl") ?? "").trim();
-  const backendUrl = normalizeBackendUrl(rawBackendUrl);
-  return backendUrl.length > 0;
-}
-
 function redactSecrets(value: string): string {
   return value
     .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]")
@@ -468,12 +463,4 @@ function redactSecrets(value: string): string {
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function normalizeBackendUrl(value: string): string {
-  const trimmed = value.replace(/\/+$/, "");
-  if (trimmed.endsWith("/api")) {
-    return trimmed.slice(0, -4);
-  }
-  return trimmed;
 }

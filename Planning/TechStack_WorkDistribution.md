@@ -1,3 +1,5 @@
+> Historical planning note. Current implementation docs live in `../README.md`.
+
 # Implementation & Work Distribution Plan: Track 1 AI Agent
 
 ## 🛠️ Recommended Tech Stack (Optimized for Hackathon Speed)

@@ -6,7 +6,6 @@ import {
   getCRById,
   isIncidentModeApprovalError,
 } from "@/lib/server/dataStore";
-import { isSupabaseConfigured } from "@/lib/server/supabaseAdmin";
 
 export const runtime = "nodejs";
 
@@ -44,8 +43,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       if (!updated) {
         return NextResponse.json({ error: "Approval request not found" }, { status: 404 });
       }
-    } else if (!isSupabaseConfigured()) {
-      return NextResponse.json({ error: "Approval request not found" }, { status: 404 });
     }
 
     const mirrored = await mirrorApprovalDecision({

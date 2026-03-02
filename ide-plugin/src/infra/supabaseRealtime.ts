@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { ApprovalDecisionEvent, approvalDecisionEventSchema } from "../schemas/contracts";
 import { Logger } from "./logger";
+import { getResolvedBackendUrl } from "./backendUrl";
 
 type Listener = (event: ApprovalDecisionEvent) => void;
 
@@ -180,8 +181,7 @@ export class SupabaseRealtimeClient {
   }
 
   private getBackendUrl(): string {
-    const raw = String(vscode.workspace.getConfiguration("aiGov").get<string>("backendUrl") ?? "").trim();
-    return normalizeBackendUrl(raw);
+    return getResolvedBackendUrl();
   }
 
   private getHeaders(): Record<string, string> {
@@ -192,12 +192,4 @@ export class SupabaseRealtimeClient {
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function normalizeBackendUrl(value: string): string {
-  const trimmed = value.replace(/\/+$/, "");
-  if (trimmed.endsWith("/api")) {
-    return trimmed.slice(0, -4);
-  }
-  return trimmed;
 }

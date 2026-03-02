@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
 import { Logger } from "./logger";
 import { SupabaseRealtimeClient } from "./supabaseRealtime";
+import { getConfiguredBackendUrl, resolveBackendUrl } from "./backendUrl";
 import {
   ApprovalDecisionEvent,
   ApprovalRequest,
@@ -12,6 +13,11 @@ import {
 type PendingDecision = {
   promise: Promise<ApprovalDecisionEvent>;
   cancel: () => void;
+};
+
+export type ApprovalRequestResult = {
+  request: ApprovalRequest;
+  source: "backend" | "local";
 };
 
 export class ApprovalClient {
@@ -30,7 +36,7 @@ export class ApprovalClient {
     reasons: string[];
     files: string[];
     commandCount: number;
-  }): Promise<ApprovalRequest> {
+  }): Promise<ApprovalRequestResult> {
     const request: ApprovalRequest = {
       approvalId: randomUUID(),
       planId: params.planId,
@@ -50,10 +56,10 @@ export class ApprovalClient {
 
     approvalRequestSchema.parse(request);
 
-    const backendUrl = this.getBackendUrl();
+    const backendUrl = await this.getBackendUrl();
     if (!backendUrl) {
       this.localStore.set(request.approvalId, { request });
-      return request;
+      return { request, source: "local" };
     }
 
     const endpoint = `${backendUrl}/approvals`;
@@ -69,7 +75,10 @@ export class ApprovalClient {
 
     const payload: unknown = await response.json();
     try {
-      return approvalRequestSchema.parse(payload);
+      return {
+        request: approvalRequestSchema.parse(payload),
+        source: "backend",
+      };
     } catch (error) {
       throw new Error(`Schema mismatch for approval request response: ${toErrorMessage(error)}`);
     }
@@ -141,8 +150,12 @@ export class ApprovalClient {
   }
 
   public async requestLocalDecision(approvalId: string): Promise<ApprovalDecisionEvent> {
+    const configured = getConfiguredBackendUrl();
+    const diagnostic = configured
+      ? `Configured backend URL (${configured}) is unreachable.`
+      : "No aiGov.backendUrl is set and no local backend was auto-detected.";
     const choice = await vscode.window.showWarningMessage(
-      "No backend approval service configured. Simulate approval decision?",
+      `${diagnostic} Simulate approval decision locally?`,
       { modal: true },
       "Approve",
       "Deny"
@@ -166,7 +179,7 @@ export class ApprovalClient {
   }
 
   private async pollDecision(approvalId: string): Promise<ApprovalDecisionEvent | undefined> {
-    const backendUrl = this.getBackendUrl();
+    const backendUrl = await this.getBackendUrl();
     if (!backendUrl) {
       return this.localStore.get(approvalId)?.decision;
     }
@@ -190,9 +203,8 @@ export class ApprovalClient {
     return event;
   }
 
-  private getBackendUrl(): string {
-    const raw = String(vscode.workspace.getConfiguration("aiGov").get<string>("backendUrl") ?? "").trim();
-    return normalizeBackendUrl(raw);
+  private async getBackendUrl(): Promise<string> {
+    return resolveBackendUrl(this.logger);
   }
 
   private getRequestedBy(): string {
@@ -210,12 +222,4 @@ export class ApprovalClient {
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function normalizeBackendUrl(value: string): string {
-  const trimmed = value.replace(/\/+$/, "");
-  if (trimmed.endsWith("/api")) {
-    return trimmed.slice(0, -4);
-  }
-  return trimmed;
 }

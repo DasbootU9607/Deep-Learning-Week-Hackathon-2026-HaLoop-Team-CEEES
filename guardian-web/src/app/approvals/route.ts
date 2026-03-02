@@ -19,7 +19,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         planPayload: snapshot?.response,
       });
     } catch (mirrorError) {
-      console.warn("Supabase approval mirror skipped:", toErrorMessage(mirrorError));
+      console.warn("SQLite approval mirror skipped:", toErrorMessage(mirrorError));
     }
 
     return NextResponse.json(stored);

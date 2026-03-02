@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
 import { Logger } from "./logger";
+import { getConfiguredBackendUrl, resolveBackendUrl } from "./backendUrl";
 import { GeneratePlanRequest, GeneratePlanResponse, generatePlanResponseSchema } from "../schemas/contracts";
 
 export class AIClient {
   public constructor(private readonly logger: Logger) {}
 
   public async generatePlan(request: GeneratePlanRequest): Promise<GeneratePlanResponse> {
-    const { backendUrl, apiKey } = getConfig();
+    const { apiKey } = getConfig();
+    const backendUrl = (await resolveBackendUrl(this.logger)) || getConfiguredBackendUrl();
     if (!backendUrl) {
       this.logger.warn("aiGov.backendUrl is not configured; using local mock response.");
       return buildMockPlan(request);
@@ -73,21 +75,11 @@ function buildMockPlan(request: GeneratePlanRequest): GeneratePlanResponse {
   };
 }
 
-function getConfig(): { backendUrl: string; apiKey: string } {
+function getConfig(): { apiKey: string } {
   const config = vscode.workspace.getConfiguration("aiGov");
-  const rawBackendUrl = String(config.get<string>("backendUrl") ?? "").trim();
   return {
-    backendUrl: normalizeBackendUrl(rawBackendUrl),
     apiKey: String(config.get<string>("apiKey") ?? "").trim()
   };
-}
-
-function normalizeBackendUrl(value: string): string {
-  const trimmed = value.replace(/\/+$/, "");
-  if (trimmed.endsWith("/api")) {
-    return trimmed.slice(0, -4);
-  }
-  return trimmed;
 }
 
 function toErrorMessage(error: unknown): string {

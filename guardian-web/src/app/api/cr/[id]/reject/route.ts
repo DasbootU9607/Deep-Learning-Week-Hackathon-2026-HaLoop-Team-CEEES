@@ -32,7 +32,7 @@ export async function POST(request: Request, { params }: Params): Promise<NextRe
         reason: body.comment,
       });
     } catch (mirrorError) {
-      console.warn("Supabase approval decision mirror skipped:", toErrorMessage(mirrorError));
+      console.warn("SQLite approval decision mirror skipped:", toErrorMessage(mirrorError));
     }
 
     return NextResponse.json(updated);

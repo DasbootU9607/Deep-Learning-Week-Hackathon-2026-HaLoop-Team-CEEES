@@ -1,30 +1,77 @@
 # CEEES Deep Learning Week Hackathon 2026 Project
 
-Track 1 project: a **safe, human-governed AI coding agent** with:
+Track 1 implementation: a safe, human-governed AI coding agent with:
 
-- a VS Code extension (`ide-plugin`) for AI code generation + local guardrails
-- a Next.js dashboard/backend (`guardian-web`) for approvals, incident mode, policy, and audit
-- demo scripts/use-cases (`demo`) for the full golden path
+- `ide-plugin/`: VS Code extension for AI tasks + local guardrails
+- `guardian-web/`: dashboard and backend APIs for approvals, incident mode, policy, audit
+- `demo/`: end-to-end demo scripts and scripted scenarios
+- `sqlite/`: SQLite schema for backend mirror persistence
 
-## Repository Layout
+## Start Here
 
-- `guardian-web/`: dashboard UI + backend API routes
-- `ide-plugin/`: VS Code extension
-- `demo/`: runbook, prompts, helper scripts
-- `supabase/migrations/`: SQL migration for optional Supabase persistence
-- `Planning/`: architecture and team/work-distribution docs
+Use this file as the canonical setup/run guide.
+Module-specific details live in:
 
-## Prerequisites
+- `guardian-web/README.md`
+- `ide-plugin/README.md`
+- `demo/README.md`
 
-- Node.js 18+ and npm
+Historical planning material is in `Planning/` and is not the source of truth for current runtime setup.
+
+## Documentation Map
+
+- `README.md`: canonical cross-platform setup + run
+- `guardian-web/README.md`: dashboard/backend module guide
+- `ide-plugin/README.md`: extension module guide
+- `demo/README.md`: demo execution guide
+- `demo/USECASES.md`: scripted live demo path
+- `docs/backend-storage-features.md`: storage feature mapping (legacy Supabase intent -> SQLite implementation)
+- `docs/README.md`: docs index/maintenance notes
+- `Planning/README.md`: index of historical planning docs
+
+## Dependency Checklist (Computer-Agnostic)
+
+### Required
+
+- `git`
+- Node.js `22.x` and npm
 - VS Code
-- (Optional) Supabase project if you want persistent backend storage
 
-## Quick Start (Local Demo Mode, No Supabase Required)
+Reason for Node 22: backend mirror uses Node built-in `node:sqlite`.
 
-This mode works fully for the hackathon demo path using local `.data` storage.
+### Required For Shell Scripts
 
-1. Install dependencies:
+- `bash`
+- `curl`
+- `jq`
+- `uuidgen`
+
+Needed by:
+
+- `guardian-web/scripts/test-integration-flow.sh`
+- `demo/scripts/*.sh`
+
+### Optional
+
+- VS Code CLI `code` in PATH (used by `demo/scripts/open-plugin-dev-host.sh`)
+
+## Verify Toolchain
+
+```bash
+node -v
+npm -v
+git --version
+code --version
+curl --version
+jq --version
+uuidgen
+```
+
+If `code` is unavailable, run extension host via VS Code `F5`.
+
+## Install Dependencies
+
+### macOS/Linux/Git Bash
 
 ```bash
 cd guardian-web && npm ci
@@ -32,29 +79,47 @@ cd ../ide-plugin && npm ci
 cd ..
 ```
 
-2. Start dashboard/backend:
+### Windows PowerShell
+
+```powershell
+Set-Location guardian-web; npm ci
+Set-Location ../ide-plugin; npm ci
+Set-Location ..
+```
+
+## Run Locally
+
+### 1) Start dashboard/backend
 
 ```bash
 cd guardian-web
 npm run dev
 ```
 
-3. Build plugin:
+Runs on `http://localhost:3000` by default.
+
+### 2) Build plugin
 
 ```bash
 cd ../ide-plugin
 npm run build
 ```
 
-4. Run extension development host (from repo root):
+### 3) Start extension development host
+
+Option A (script):
 
 ```bash
 bash demo/scripts/open-plugin-dev-host.sh
 ```
 
-Alternative: open `ide-plugin/` in VS Code and press `F5` (`Extension` target).
+Option B (manual):
 
-5. In the Extension Development Host, configure workspace settings:
+1. Open `ide-plugin/` in VS Code.
+2. Press `F5`.
+3. Run `Extension` launch target.
+
+### 4) Configure workspace settings in extension host
 
 ```json
 {
@@ -65,57 +130,51 @@ Alternative: open `ide-plugin/` in VS Code and press `F5` (`Extension` target).
 }
 ```
 
-You can copy values from `demo/vscode-settings.sample.json`.
+`aiGov.backendUrl` accepts either:
 
-6. Run the demo scenarios in order:
+- `http://localhost:3000`
+- `http://localhost:3000/api`
 
-- `demo/USECASES.md`
+The plugin normalizes both.
 
-## Optional: Enable Supabase Persistence
+### 5) Run demo scenarios
 
-If configured, backend routes mirror approval/audit data to Supabase.
+Follow `demo/USECASES.md`.
 
-1. Create `guardian-web/.env.local`:
+## SQLite Backend Mirror
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-```
+Initialized automatically by `guardian-web`.
 
-2. Apply migration SQL from:
+- default path: `guardian-web/.data/backend-mirror.sqlite`
+- override path: `SQLITE_DB_PATH`
 
-- `supabase/migrations/0001_init.sql`
-
-Use Supabase SQL Editor (or your preferred migration workflow).
-
-3. Restart dashboard:
+Example:
 
 ```bash
-cd guardian-web
-npm run dev
+SQLITE_DB_PATH=.data/custom-backend.sqlite npm run dev
 ```
 
-If env vars are missing, the app falls back to local `.data` storage automatically.
+Reference schema: `sqlite/migrations/0001_init.sql`
 
-## API Endpoints
+## API Surface
 
-### Plugin-facing endpoints (used by `ide-plugin`)
+### Plugin-facing routes
 
 - `POST /generate-plan`
 - `POST /approvals`
 - `GET /approvals/:approvalId/decision`
-- `GET /approvals/:approvalId/events` (SSE realtime decisions)
+- `GET /approvals/:approvalId/events`
 
-### Backend compatibility endpoints
+### Compatibility routes
 
-- `POST /api/ai/plan` (goal-based plan API)
-- `POST /api/approvals` (status update API)
+- `POST /api/ai/plan`
+- `POST /api/approvals`
 - `GET /api/audit`
-- `GET /api/audit?view=compact` (backend-style compact audit payload)
+- `GET /api/audit?view=compact`
 
-## Useful Commands
+## Validation Commands
 
-Run guardian-web checks:
+### guardian-web
 
 ```bash
 cd guardian-web
@@ -123,22 +182,49 @@ npm run lint
 npm run build
 ```
 
-Run plugin tests:
+### ide-plugin
 
 ```bash
 cd ide-plugin
+npm run build
 npm test
 ```
 
-Run integration flow checks (requires `curl`, `jq`, `uuidgen` and running dashboard):
+### end-to-end integration checks
+
+Requires `bash`, `curl`, `jq`, `uuidgen` and running dashboard.
 
 ```bash
 cd guardian-web
 BASE_URL=http://localhost:3000 npm run test:integration
 ```
 
-Reset local demo state:
+## Reset State
+
+Reset local mock CR/audit store:
 
 ```bash
 bash demo/scripts/reset-demo-state.sh
 ```
+
+Reset SQLite mirror:
+
+- delete `guardian-web/.data/backend-mirror.sqlite`
+
+## Troubleshooting
+
+### Plugin says backend approval service is not configured
+
+1. Confirm `guardian-web` is running on `http://localhost:3000`.
+2. Check workspace setting `aiGov.backendUrl`.
+3. Reload extension host window after settings change.
+4. Rebuild plugin:
+
+```bash
+cd ide-plugin
+npm run build
+```
+
+### Missing `bash` / `jq` / `uuidgen` on Windows
+
+Use Git Bash or WSL for script-based flows.
