@@ -1,0 +1,81 @@
+{
+  "name": "aigov-ide-plugin",
+  "displayName": "AI Governance IDE Plugin",
+  "description": "VS Code extension for AI generation with governance guardrails",
+  "version": "0.0.1",
+  "publisher": "ceees-hackathon",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:aiGov.openChat",
+    "onCommand:aiGov.runTask",
+    "onCommand:aiGov.deadManSwitch"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiGov.openChat",
+        "title": "AI Gov: Open Chat"
+      },
+      {
+        "command": "aiGov.runTask",
+        "title": "AI Gov: Run Task"
+      },
+      {
+        "command": "aiGov.deadManSwitch",
+        "title": "AI Gov: Dead Man's Switch"
+      }
+    ],
+    "configuration": {
+      "title": "AI Governance",
+      "properties": {
+        "aiGov.backendUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Backend base URL for plan generation and approvals."
+        },
+        "aiGov.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Optional API key sent as Authorization Bearer token."
+        },
+        "aiGov.requestedBy": {
+          "type": "string",
+          "default": "local-dev",
+          "description": "Identity label included in approval requests."
+        },
+        "aiGov.pollIntervalMs": {
+          "type": "number",
+          "default": 3000,
+          "description": "Approval polling interval in milliseconds."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:extension && npm run build:webview",
+    "build:extension": "tsc -p tsconfig.json",
+    "build:webview": "node scripts/build-webview.mjs",
+    "watch:extension": "tsc -w -p tsconfig.json",
+    "watch:webview": "node scripts/build-webview.mjs --watch",
+    "dev": "npm run build"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.2"
+  }
+}
