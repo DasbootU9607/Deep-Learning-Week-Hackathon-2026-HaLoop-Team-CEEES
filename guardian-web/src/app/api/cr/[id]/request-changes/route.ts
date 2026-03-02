@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { mirrorApprovalDecision } from "@/lib/server/backendMirror";
 import { applyReviewAction, isIncidentModeApprovalError } from "@/lib/server/dataStore";
 import { crReviewActionBodySchema } from "@/lib/server/contracts";
 
@@ -11,15 +12,27 @@ interface Params {
 export async function POST(request: Request, { params }: Params): Promise<NextResponse> {
   try {
     const body = crReviewActionBodySchema.parse(await readJson(request));
+    const reviewer = body.reviewer ?? "Web Reviewer";
     const updated = await applyReviewAction({
       crId: params.id,
       action: "changes_requested",
-      reviewer: body.reviewer,
+      reviewer,
       comment: body.comment,
     });
 
     if (!updated) {
       return NextResponse.json({ error: "CR not found" }, { status: 404 });
+    }
+
+    try {
+      await mirrorApprovalDecision({
+        approvalId: params.id,
+        decision: "changes_requested",
+        reviewer,
+        reason: body.comment,
+      });
+    } catch (mirrorError) {
+      console.warn("Supabase approval decision mirror skipped:", toErrorMessage(mirrorError));
     }
 
     return NextResponse.json(updated);

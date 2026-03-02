@@ -14,11 +14,13 @@ import {
   GeneratePlanResponse,
 } from "@/lib/server/contracts";
 
-type StoredPlan = {
+export type StoredPlanSnapshot = {
   request: GeneratePlanRequest;
   response: GeneratePlanResponse;
   createdAt: string;
 };
+
+type StoredPlan = StoredPlanSnapshot;
 
 type ApprovalTicket = {
   request: ApprovalRequest;
@@ -148,6 +150,11 @@ export async function saveGeneratedPlan(params: {
       createdAt: new Date().toISOString(),
     };
   });
+}
+
+export async function getStoredPlan(planId: string): Promise<StoredPlanSnapshot | undefined> {
+  const db = await readStore();
+  return db.plans[planId];
 }
 
 export async function getApprovalDecision(approvalId: string): Promise<ApprovalDecisionEvent | undefined> {

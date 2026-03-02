@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { approvalRequestSchema } from "@/lib/server/contracts";
-import { createApprovalTicket } from "@/lib/server/dataStore";
+import { mirrorPluginApprovalRequest } from "@/lib/server/backendMirror";
+import { createApprovalTicket, getStoredPlan } from "@/lib/server/dataStore";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,19 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const payload = approvalRequestSchema.parse(await request.json());
     const stored = await createApprovalTicket(payload);
+
+    try {
+      const snapshot = await getStoredPlan(payload.planId);
+      await mirrorPluginApprovalRequest({
+        request: payload,
+        branchName: snapshot?.request.context.branch,
+        summary: snapshot?.response.summary,
+        planPayload: snapshot?.response,
+      });
+    } catch (mirrorError) {
+      console.warn("Supabase approval mirror skipped:", toErrorMessage(mirrorError));
+    }
+
     return NextResponse.json(stored);
   } catch (error) {
     return NextResponse.json(
