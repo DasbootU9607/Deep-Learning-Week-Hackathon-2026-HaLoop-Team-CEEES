@@ -243,8 +243,6 @@ Full instructions are in:
 
 Current limitations:
 
-- no external identity provider integration (reviewer identity is local/demo mode)
-- local/demo datastore and mirror are file-based; no distributed deployment guarantees
 - compact audit compatibility is implemented, but enterprise export/search features are minimal
 
 Future work:
