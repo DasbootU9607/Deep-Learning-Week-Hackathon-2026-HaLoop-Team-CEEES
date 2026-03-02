@@ -1,5 +1,7 @@
 # CEEES Deep Learning Week Hackathon 2026 Project
 
+![HaLoop Logo](./HaLoop_Logo.png)
+
 Track 1 implementation: a safe, human-governed AI coding agent with:
 
 - `ide-plugin/`: VS Code extension for AI tasks + local guardrails
@@ -30,8 +32,51 @@ Historical planning material is in `Planning/` and is not the source of truth fo
 - `demo/README.md`: demo execution guide
 - `demo/USECASES.md`: scripted live demo path
 - `docs/backend-storage-features.md`: storage feature mapping (legacy Supabase intent -> SQLite implementation)
+- `docs/mermaid.md`: architecture diagram (Mermaid source for documentation and GitHub rendering)
 - `docs/README.md`: docs index/maintenance notes
 - `Planning/README.md`: index of historical planning docs
+
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+    subgraph Client_Layer["User Interface"]
+        U[User]
+        W[Web UI - Next.js]
+        P[IDE Plugin]
+    end
+
+    subgraph App_Layer["App Reasoner"]
+        API[Next.js API Routes]
+        GOV[Policy + Risk Engine]
+        APPROVAL[Approval Workflow]
+        INCIDENT[Incident Mode Control]
+    end
+
+    subgraph Data_Layer["Data"]
+        STORE[(Data Store / SQLite Mirror)]
+        AUDIT[(Audit Logs)]
+        POLICY[(Policy Config)]
+    end
+
+    U --> W
+    U --> P
+    W --> API
+    P --> API
+
+    API --> GOV
+    API --> APPROVAL
+    API --> INCIDENT
+
+    GOV --> STORE
+    APPROVAL --> STORE
+    INCIDENT --> STORE
+
+    STORE --> AUDIT
+    STORE --> POLICY
+```
+
+Primary editable architecture source: `docs/mermaid.md`
 
 ## Dependency Checklist (Computer-Agnostic)
 

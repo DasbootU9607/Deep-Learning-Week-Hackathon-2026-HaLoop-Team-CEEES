@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, GitPullRequest, Shield, ScrollText, AlertOctagon, ChevronRight } from "lucide-react";
@@ -22,8 +23,8 @@ export function Sidebar() {
     <aside className="hidden h-full w-72 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
       <div className="border-b border-sidebar-border px-6 py-6">
         <Link href="/" className="glass-muted flex items-center gap-3 px-3 py-2.5 transition-transform hover:-translate-y-0.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15">
-            <Shield className="h-5 w-5 text-primary" />
+          <div className="relative h-10 w-10 overflow-hidden rounded-xl border border-primary/20 bg-card">
+            <Image src="/HaLoop_Logo.png" alt="HaLoop logo" fill sizes="40px" className="object-contain p-1" priority />
           </div>
           <div>
             <span className="block text-base font-semibold tracking-tight text-sidebar-foreground">HaLoop</span>

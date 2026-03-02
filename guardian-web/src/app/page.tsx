@@ -1,5 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, Sparkles, Workflow, LayoutDashboard, GitPullRequest, ScrollText, Shield, AlertOctagon } from "lucide-react";
+import { ArrowRight, Sparkles, Workflow, LayoutDashboard, GitPullRequest, ScrollText, Shield, AlertOctagon } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 export default function RootPage() {
@@ -10,7 +11,9 @@ export default function RootPage() {
       <div className="relative mx-auto flex w-full max-w-[1180px] flex-col gap-8">
         <header className="flex items-center justify-between">
           <div className="glass-muted inline-flex items-center gap-2 rounded-2xl px-3 py-2">
-            <ShieldCheck className="h-4 w-4 text-primary" />
+            <div className="relative h-7 w-7 overflow-hidden rounded-md border border-primary/20 bg-card">
+              <Image src="/HaLoop_Logo.png" alt="HaLoop logo" fill sizes="28px" className="object-contain p-0.5" priority />
+            </div>
             <span className="text-sm font-semibold tracking-tight">HaLoop</span>
           </div>
           <div className="flex items-center gap-2">
@@ -27,7 +30,10 @@ export default function RootPage() {
               <Sparkles className="h-3.5 w-3.5" />
               HaLoop
             </p>
-            <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            <div className="relative h-20 w-56 sm:h-24 sm:w-64 lg:h-28 lg:w-72">
+              <Image src="/HaLoop_Logo.png" alt="HaLoop logo" fill sizes="288px" className="object-contain object-left" priority />
+            </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
               Faster AI changes. Safer releases.
             </h1>
             <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
