@@ -21,6 +21,10 @@ Historical planning material is in `Planning/` and is not the source of truth fo
 ## Documentation Map
 
 - `README.md`: canonical cross-platform setup + run
+- `project_documentation.md`: submission-focused methodology/results/testing document (Markdown draft for final PDF conversion)
+- `testbench/README.md`: grader entry point for setup/run validation
+- `testbench/setup-and-run.md`: step-by-step setup and execution guide for graders
+- `testbench/test-cases.md`: structured manual validation scenarios and expected behavior
 - `guardian-web/README.md`: dashboard/backend module guide
 - `ide-plugin/README.md`: extension module guide
 - `demo/README.md`: demo execution guide

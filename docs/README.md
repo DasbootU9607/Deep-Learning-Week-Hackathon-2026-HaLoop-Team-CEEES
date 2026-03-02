@@ -7,6 +7,10 @@ This directory contains operational documentation that supplements module README
 - `backend-storage-features.md`
   - maps legacy storage intent to current SQLite implementation
   - lists retained persistence/audit features
+- `../project_documentation.md`
+  - submission-focused methodology, results, observations, and findings
+- `../testbench/`
+  - grader-oriented setup/run and validation scenarios
 
 ## Documentation Rules
 
