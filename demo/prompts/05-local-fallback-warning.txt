@@ -1,0 +1,2 @@
+(Use this only when aiGov.backendUrl is empty)
+Modify auth controls and package.json so plugin shows the local mock approval warning modal.

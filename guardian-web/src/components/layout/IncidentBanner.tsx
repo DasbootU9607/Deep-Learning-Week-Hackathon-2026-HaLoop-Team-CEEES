@@ -26,7 +26,7 @@ export function IncidentBanner() {
       <div className="flex items-center gap-2 shrink-0">
         <span className="text-xs text-red-300">All approvals suspended</span>
         <button
-          onClick={disableIncidentMode}
+          onClick={() => disableIncidentMode()}
           className="rounded p-1 hover:bg-red-800 transition-colors"
           aria-label="Disable incident mode"
         >

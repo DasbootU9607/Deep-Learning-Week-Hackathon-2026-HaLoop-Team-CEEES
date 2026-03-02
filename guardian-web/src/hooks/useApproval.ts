@@ -18,7 +18,7 @@ export function useApproval(crId: string) {
       toast.success("CR approved successfully");
       invalidate();
     },
-    onError: () => toast.error("Failed to approve CR"),
+    onError: (error) => toast.error(toErrorMessage(error, "Failed to approve CR")),
   });
 
   const reject = useMutation({
@@ -27,7 +27,7 @@ export function useApproval(crId: string) {
       toast.success("CR rejected");
       invalidate();
     },
-    onError: () => toast.error("Failed to reject CR"),
+    onError: (error) => toast.error(toErrorMessage(error, "Failed to reject CR")),
   });
 
   const requestChanges = useMutation({
@@ -36,8 +36,28 @@ export function useApproval(crId: string) {
       toast.success("Changes requested");
       invalidate();
     },
-    onError: () => toast.error("Failed to request changes"),
+    onError: (error) => toast.error(toErrorMessage(error, "Failed to request changes")),
   });
 
   return { approve, reject, requestChanges };
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) {
+    return fallback;
+  }
+
+  const match = error.message.match(/-\\s*(\\{.*\\})$/);
+  if (match?.[1]) {
+    try {
+      const parsed = JSON.parse(match[1]) as { error?: string };
+      if (parsed.error) {
+        return parsed.error;
+      }
+    } catch {
+      // Fall through to default handling.
+    }
+  }
+
+  return error.message || fallback;
 }

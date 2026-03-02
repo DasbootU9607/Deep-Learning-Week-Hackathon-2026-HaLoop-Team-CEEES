@@ -80,6 +80,27 @@ export const updatePathRulesBodySchema = z.object({
       created_by: z.string().min(1),
     }),
   ),
+  riskThresholds: z
+    .object({
+      low_max: z.number().int().min(0).max(100),
+      med_max: z.number().int().min(0).max(100),
+      auto_approve_below: z.number().int().min(0).max(100).optional(),
+      require_dual_approval_above: z.number().int().min(0).max(100).optional(),
+    })
+    .optional(),
+});
+
+export const incidentModeStateSchema = z.object({
+  isIncidentMode: z.boolean(),
+  activatedAt: z.string().optional(),
+  activatedBy: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+export const setIncidentModeBodySchema = z.object({
+  enabled: z.boolean(),
+  by: z.string().trim().min(1).max(120).optional(),
+  reason: z.string().trim().max(500).optional(),
 });
 
 export type FileChange = z.infer<typeof fileChangeSchema>;
@@ -89,3 +110,5 @@ export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
 export type ApprovalDecisionEvent = z.infer<typeof approvalDecisionEventSchema>;
 export type CRReviewActionBody = z.infer<typeof crReviewActionBodySchema>;
 export type UpdatePathRulesBody = z.infer<typeof updatePathRulesBodySchema>;
+export type IncidentModeState = z.infer<typeof incidentModeStateSchema>;
+export type SetIncidentModeBody = z.infer<typeof setIncidentModeBodySchema>;

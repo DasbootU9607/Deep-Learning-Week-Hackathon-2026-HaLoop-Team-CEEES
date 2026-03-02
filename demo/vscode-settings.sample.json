@@ -1,0 +1,6 @@
+{
+  "aiGov.backendUrl": "http://localhost:3000",
+  "aiGov.apiKey": "",
+  "aiGov.requestedBy": "demo-presenter",
+  "aiGov.pollIntervalMs": 3000
+}

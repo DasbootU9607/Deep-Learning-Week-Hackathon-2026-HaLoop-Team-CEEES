@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 interface PolicyEditorProps {
   policy: Policy;
-  onSaveRules: (rules: PathRule[]) => void;
+  onSaveRules: (input: { rules: PathRule[]; riskThresholds: RiskThreshold }) => void;
 }
 
 export function PolicyEditor({ policy, onSaveRules }: PolicyEditorProps) {
@@ -32,7 +32,7 @@ export function PolicyEditor({ policy, onSaveRules }: PolicyEditorProps) {
   };
 
   const handleSave = () => {
-    onSaveRules(rules);
+    onSaveRules({ rules, riskThresholds: thresholds });
     setIsDirty(false);
     toast.success("Policy saved successfully");
   };

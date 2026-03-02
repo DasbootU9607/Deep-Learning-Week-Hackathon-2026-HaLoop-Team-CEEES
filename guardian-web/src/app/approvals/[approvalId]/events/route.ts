@@ -17,21 +17,12 @@ export async function GET(request: Request, { params }: Params): Promise<Respons
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let active = true;
-      let pollTimer: NodeJS.Timeout | undefined;
-      let heartbeatTimer: NodeJS.Timeout | undefined;
-      let timeoutTimer: NodeJS.Timeout | undefined;
 
       const cleanup = (): void => {
         active = false;
-        if (pollTimer) {
-          clearInterval(pollTimer);
-        }
-        if (heartbeatTimer) {
-          clearInterval(heartbeatTimer);
-        }
-        if (timeoutTimer) {
-          clearTimeout(timeoutTimer);
-        }
+        clearInterval(pollTimer);
+        clearInterval(heartbeatTimer);
+        clearTimeout(timeoutTimer);
       };
 
       const sendDecision = async (): Promise<void> => {
@@ -51,18 +42,18 @@ export async function GET(request: Request, { params }: Params): Promise<Respons
 
       void sendDecision();
 
-      heartbeatTimer = setInterval(() => {
+      const heartbeatTimer = setInterval(() => {
         if (!active) {
           return;
         }
         controller.enqueue(encoder.encode(`: keep-alive ${Date.now()}\n\n`));
       }, HEARTBEAT_MS);
 
-      pollTimer = setInterval(() => {
+      const pollTimer = setInterval(() => {
         void sendDecision();
       }, POLL_MS);
 
-      timeoutTimer = setTimeout(() => {
+      const timeoutTimer = setTimeout(() => {
         if (!active) {
           return;
         }

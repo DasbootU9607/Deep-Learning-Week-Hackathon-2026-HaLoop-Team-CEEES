@@ -8,6 +8,7 @@ import { CR, CRFilters, CRListItem, PatchFile, RiskLevel } from "@/types/cr";
 import { PathRule, Policy } from "@/types/policy";
 import {
   ApprovalDecisionEvent,
+  IncidentModeState,
   ApprovalRequest,
   GeneratePlanRequest,
   GeneratePlanResponse,
@@ -28,6 +29,7 @@ type ApprovalTicket = {
 
 type StoreState = {
   policy: Policy;
+  incident: IncidentModeState;
   crs: CR[];
   audits: AuditLog[];
   plans: Record<string, StoredPlan>;
@@ -36,6 +38,7 @@ type StoreState = {
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const DATA_FILE = path.join(DATA_DIR, "integration-store.json");
+export const INCIDENT_APPROVAL_BLOCKED_CODE = "INCIDENT_MODE_APPROVAL_BLOCKED";
 
 let writeChain: Promise<unknown> = Promise.resolve();
 
@@ -127,6 +130,13 @@ const DEFAULT_POLICY: Policy = {
   created_by: "system",
 };
 
+const DEFAULT_INCIDENT_STATE: IncidentModeState = {
+  isIncidentMode: false,
+  activatedAt: undefined,
+  activatedBy: undefined,
+  reason: undefined,
+};
+
 export async function saveGeneratedPlan(params: {
   request: GeneratePlanRequest;
   response: GeneratePlanResponse;
@@ -214,6 +224,10 @@ export async function applyReviewAction(params: {
   comment?: string;
 }): Promise<CR | undefined> {
   return withWrite(async (db) => {
+    if (db.incident.isIncidentMode) {
+      throw createIncidentModeApprovalError();
+    }
+
     const cr = db.crs.find((candidate) => candidate.id === params.crId);
     if (!cr) {
       return undefined;
@@ -295,9 +309,77 @@ export async function getActivePolicy(): Promise<Policy> {
   return db.policy;
 }
 
-export async function updatePathRules(rules: PathRule[]): Promise<Policy> {
+export async function getIncidentModeState(): Promise<IncidentModeState> {
+  const db = await readStore();
+  return db.incident;
+}
+
+export async function setIncidentModeState(params: {
+  enabled: boolean;
+  by?: string;
+  reason?: string;
+}): Promise<IncidentModeState> {
   return withWrite(async (db) => {
+    const now = new Date().toISOString();
+    const actor = params.by?.trim() || "Incident Commander";
+
+    if (params.enabled) {
+      db.incident = {
+        isIncidentMode: true,
+        activatedAt: now,
+        activatedBy: actor,
+        reason: params.reason?.trim() || undefined,
+      };
+
+      appendAudit(db, {
+        actor_id: actor.toLowerCase().replace(/\s+/g, "-"),
+        actor_name: actor,
+        action: "incident_mode_enabled",
+        details: params.reason ? { reason: params.reason } : undefined,
+        risk_level: "high",
+      });
+    } else {
+      const previousActivatedAt = db.incident.activatedAt;
+      const durationMinutes = previousActivatedAt
+        ? Math.max(0, Math.round((Date.parse(now) - Date.parse(previousActivatedAt)) / 60_000))
+        : 0;
+
+      db.incident = {
+        isIncidentMode: false,
+        activatedAt: undefined,
+        activatedBy: undefined,
+        reason: undefined,
+      };
+
+      appendAudit(db, {
+        actor_id: actor.toLowerCase().replace(/\s+/g, "-"),
+        actor_name: actor,
+        action: "incident_mode_disabled",
+        details: {
+          ...(params.reason ? { reason: params.reason } : {}),
+          duration_minutes: durationMinutes,
+        },
+        risk_level: "med",
+      });
+    }
+
+    return db.incident;
+  });
+}
+
+export async function updatePathRules(
+  rules: PathRule[],
+  riskThresholds?: Policy["risk_thresholds"],
+): Promise<Policy> {
+  return withWrite(async (db) => {
+    if (riskThresholds && riskThresholds.low_max >= riskThresholds.med_max) {
+      throw new Error("Invalid thresholds: low_max must be smaller than med_max.");
+    }
+
     db.policy.path_rules = rules;
+    if (riskThresholds) {
+      db.policy.risk_thresholds = riskThresholds;
+    }
     db.policy.version += 1;
     db.policy.updated_at = new Date().toISOString();
 
@@ -306,7 +388,10 @@ export async function updatePathRules(rules: PathRule[]): Promise<Policy> {
       actor_name: "Policy Admin",
       action: "policy_updated",
       target_policy_id: db.policy.id,
-      details: { rule_count: rules.length },
+      details: {
+        rule_count: rules.length,
+        thresholds_updated: Boolean(riskThresholds),
+      },
       risk_level: "med",
     });
 
@@ -325,6 +410,9 @@ async function readStore(): Promise<StoreState> {
   }
   if (!parsed.approvals) {
     parsed.approvals = {};
+  }
+  if (!parsed.incident) {
+    parsed.incident = deepClone(DEFAULT_INCIDENT_STATE);
   }
 
   return parsed;
@@ -365,6 +453,7 @@ function withWrite<T>(mutate: (state: StoreState) => Promise<T> | T): Promise<T>
 function createDefaultStore(): StoreState {
   return {
     policy: deepClone(DEFAULT_POLICY),
+    incident: deepClone(DEFAULT_INCIDENT_STATE),
     crs: deepClone(mockCRs),
     audits: deepClone(mockAuditLogs),
     plans: {},
@@ -591,4 +680,17 @@ function countLines(text: string): number {
     return 0;
   }
   return text.split("\n").length;
+}
+
+function createIncidentModeApprovalError(): Error {
+  const error = new Error("Approvals are suspended during Incident Mode.");
+  (error as Error & { code?: string }).code = INCIDENT_APPROVAL_BLOCKED_CODE;
+  return error;
+}
+
+export function isIncidentModeApprovalError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return (error as Error & { code?: string }).code === INCIDENT_APPROVAL_BLOCKED_CODE;
 }

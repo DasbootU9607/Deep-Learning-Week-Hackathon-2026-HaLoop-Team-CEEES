@@ -1,0 +1,1 @@
+Create a short documentation note in docs/demo-note.md describing this repository.

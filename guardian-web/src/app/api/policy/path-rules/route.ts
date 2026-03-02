@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export async function PUT(request: Request): Promise<NextResponse> {
   try {
     const body = updatePathRulesBodySchema.parse(await request.json());
-    const policy = await updatePathRules(body.rules);
+    const policy = await updatePathRules(body.rules, body.riskThresholds);
     return NextResponse.json(policy);
   } catch (error) {
     return NextResponse.json({ error: toErrorMessage(error) }, { status: 400 });

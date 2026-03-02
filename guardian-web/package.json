@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:integration": "bash scripts/test-integration-flow.sh"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",

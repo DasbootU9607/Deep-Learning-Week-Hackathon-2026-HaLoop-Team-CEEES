@@ -16,7 +16,8 @@ import { cn, formatDateTime, getRiskBgColor } from "@/lib/utils";
 import { AlertOctagon, Clock, User, ShieldOff, Activity } from "lucide-react";
 
 export default function IncidentPage() {
-  const { isIncidentMode, activatedAt, activatedBy, reason, enableIncidentMode, disableIncidentMode } = useIncidentMode();
+  const { isIncidentMode, activatedAt, activatedBy, reason, enableIncidentMode, disableIncidentMode, isUpdating } =
+    useIncidentMode();
   const [newReason, setNewReason] = useState("");
 
   useQuery({
@@ -89,6 +90,7 @@ export default function IncidentPage() {
                   checked={isIncidentMode}
                   onCheckedChange={handleToggle}
                   className="data-[state=checked]:bg-red-600"
+                  disabled={isUpdating}
                 />
               </div>
 
@@ -110,6 +112,7 @@ export default function IncidentPage() {
                     variant="destructive"
                     className="w-full"
                     onClick={() => enableIncidentMode("Grace Kim", newReason || undefined)}
+                    disabled={isUpdating}
                   >
                     <AlertOctagon className="h-4 w-4 mr-2" />
                     Enable Incident Mode
@@ -118,7 +121,7 @@ export default function IncidentPage() {
               )}
 
               {isIncidentMode && (
-                <Button variant="outline" className="w-full" onClick={disableIncidentMode}>
+                <Button variant="outline" className="w-full" onClick={() => disableIncidentMode()} disabled={isUpdating}>
                   Disable Incident Mode
                 </Button>
               )}

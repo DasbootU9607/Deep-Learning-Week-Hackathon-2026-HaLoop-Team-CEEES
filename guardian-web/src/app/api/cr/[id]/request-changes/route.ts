@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { applyReviewAction } from "@/lib/server/dataStore";
+import { applyReviewAction, isIncidentModeApprovalError } from "@/lib/server/dataStore";
 import { crReviewActionBodySchema } from "@/lib/server/contracts";
 
 export const runtime = "nodejs";
@@ -24,6 +24,9 @@ export async function POST(request: Request, { params }: Params): Promise<NextRe
 
     return NextResponse.json(updated);
   } catch (error) {
+    if (isIncidentModeApprovalError(error)) {
+      return NextResponse.json({ error: toErrorMessage(error) }, { status: 409 });
+    }
     return NextResponse.json({ error: toErrorMessage(error) }, { status: 400 });
   }
 }

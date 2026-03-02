@@ -1,0 +1,1 @@
+Modify auth guard to enforce stricter token validation and update auth middleware.
