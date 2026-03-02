@@ -2,12 +2,12 @@ import { CRStatus } from "@/types/cr";
 import { cn } from "@/lib/utils";
 
 const STATUS_CONFIG: Record<CRStatus, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
-  pending_approval: { label: "Pending", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
-  approved: { label: "Approved", className: "bg-green-500/20 text-green-400 border-green-500/30" },
-  rejected: { label: "Rejected", className: "bg-red-500/20 text-red-400 border-red-500/30" },
-  changes_requested: { label: "Changes Requested", className: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
-  applied: { label: "Applied", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  draft: { label: "Draft", className: "bg-slate-500/12 text-slate-700 border-slate-400/25" },
+  pending_approval: { label: "Pending", className: "bg-yellow-500/12 text-amber-700 border-yellow-500/25" },
+  approved: { label: "Approved", className: "bg-green-500/12 text-emerald-700 border-green-500/25" },
+  rejected: { label: "Rejected", className: "bg-red-500/12 text-red-700 border-red-500/25" },
+  changes_requested: { label: "Changes Requested", className: "bg-orange-500/12 text-orange-700 border-orange-500/25" },
+  applied: { label: "Applied", className: "bg-blue-500/12 text-blue-700 border-blue-500/25" },
 };
 
 interface CRStatusBadgeProps {

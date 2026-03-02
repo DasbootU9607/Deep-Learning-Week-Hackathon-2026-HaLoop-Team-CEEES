@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Shell } from "@/components/layout/Shell";
 import { Topbar } from "@/components/layout/Topbar";
+import { PageHero } from "@/components/layout/PageHero";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuditFilters } from "@/components/audit/AuditFilters";
 import { AuditTable } from "@/components/audit/AuditTable";
@@ -19,23 +20,28 @@ export default function AuditPage() {
 
   return (
     <>
-      <Topbar
-        title="Audit Logs"
-        description="Complete audit trail of all actions in the system"
-      />
+      <Topbar title="Audit Logs" description="Immutable timeline of governance actions and reviewer decisions" />
       <Shell>
-        <AuditFilters filters={filters} onChange={setFilters} />
+        <PageHero
+          eyebrow="Audit"
+          title="Trace every governance event"
+          description="Filter by actor, action, risk and date range to investigate incidents and compliance posture."
+        />
+
+        <section className="glass-panel rounded-2xl p-4 sm:p-5">
+          <AuditFilters filters={filters} onChange={setFilters} />
+        </section>
 
         {isLoading && (
           <div className="space-y-3">
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
+              <Skeleton key={i} className="h-12 w-full rounded-xl" />
             ))}
           </div>
         )}
 
         {isError && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
+          <div className="glass-panel rounded-2xl border-destructive/40 bg-destructive/10 p-6 text-center">
             <p className="text-destructive">Failed to load audit logs</p>
           </div>
         )}

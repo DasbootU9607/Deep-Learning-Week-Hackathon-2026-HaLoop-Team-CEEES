@@ -20,9 +20,9 @@ const ACTION_LABELS: Record<string, string> = {
 const ACTION_COLORS: Record<string, string> = {
   cr_approved: "text-green-400",
   cr_rejected: "text-red-400",
-  incident_mode_enabled: "text-red-400 font-semibold",
-  incident_mode_disabled: "text-blue-400",
-  cr_changes_requested: "text-yellow-400",
+  incident_mode_enabled: "text-red-300 font-semibold",
+  incident_mode_disabled: "text-blue-300",
+  cr_changes_requested: "text-yellow-300",
 };
 
 interface AuditTableProps {
@@ -32,22 +32,22 @@ interface AuditTableProps {
 export function AuditTable({ logs }: AuditTableProps) {
   if (logs.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border p-12 text-center">
+      <div className="glass-panel rounded-2xl border-dashed border-white/20 p-12 text-center">
         <p className="text-muted-foreground">No audit logs found</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-border overflow-hidden">
+    <div className="glass-panel overflow-hidden rounded-2xl">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-secondary/30">
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Time</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Actor</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Action</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Target</th>
-            <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Risk</th>
+          <tr className="border-b border-white/10 bg-white/5">
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Time</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actor</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Action</th>
+            <th className="hidden px-4 py-3 text-left font-medium text-muted-foreground md:table-cell">Target</th>
+            <th className="hidden px-4 py-3 text-left font-medium text-muted-foreground lg:table-cell">Risk</th>
           </tr>
         </thead>
         <tbody>
@@ -55,45 +55,41 @@ export function AuditTable({ logs }: AuditTableProps) {
             <tr
               key={log.id}
               className={cn(
-                "border-b border-border last:border-0 hover:bg-secondary/20 transition-colors",
-                idx % 2 === 0 ? "" : "bg-secondary/10"
+                "border-b border-white/10 last:border-0 transition-colors hover:bg-white/10",
+                idx % 2 === 0 ? "" : "bg-white/5"
               )}
             >
-              <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                {formatDateTime(log.timestamp)}
-              </td>
+              <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{formatDateTime(log.timestamp)}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-                    {log.actor_name.split(" ").map((n) => n[0]).join("")}
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
+                    {log.actor_name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
                   </div>
                   <span className="text-sm">{log.actor_name}</span>
                 </div>
               </td>
               <td className="px-4 py-3">
-                <span className={cn("text-sm", ACTION_COLORS[log.action])}>
-                  {ACTION_LABELS[log.action] ?? log.action}
-                </span>
+                <span className={cn("text-sm", ACTION_COLORS[log.action])}>{ACTION_LABELS[log.action] ?? log.action}</span>
               </td>
-              <td className="px-4 py-3 hidden md:table-cell">
+              <td className="hidden px-4 py-3 md:table-cell">
                 {log.target_cr_id ? (
-                  <Link
-                    href={`/cr/${log.target_cr_id}`}
-                    className="text-primary hover:underline text-xs font-mono truncate max-w-xs block"
-                  >
+                  <Link href={`/cr/${log.target_cr_id}`} className="block max-w-xs truncate font-mono text-xs text-primary hover:underline">
                     {log.target_cr_title ?? log.target_cr_id}
                   </Link>
                 ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
+                  <span className="text-xs text-muted-foreground">-</span>
                 )}
               </td>
-              <td className="px-4 py-3 hidden lg:table-cell">
+              <td className="hidden px-4 py-3 lg:table-cell">
                 {log.risk_level ? (
                   <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold", getRiskBgColor(log.risk_level))}>
                     {log.risk_level}
                   </span>
                 ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
+                  <span className="text-xs text-muted-foreground">-</span>
                 )}
               </td>
             </tr>

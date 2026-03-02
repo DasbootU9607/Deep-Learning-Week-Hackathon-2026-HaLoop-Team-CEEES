@@ -11,7 +11,7 @@ interface CRTableProps {
 export function CRTable({ items }: CRTableProps) {
   if (items.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border p-12 text-center">
+      <div className="glass-panel rounded-2xl border-dashed border-white/20 p-12 text-center">
         <p className="text-muted-foreground">No change requests found</p>
         <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters</p>
       </div>
@@ -19,10 +19,10 @@ export function CRTable({ items }: CRTableProps) {
   }
 
   return (
-    <div className="rounded-lg border border-border overflow-hidden">
+    <div className="glass-panel overflow-hidden rounded-2xl">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-secondary/30">
+          <tr className="border-b border-white/10 bg-white/5">
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">Title</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Repository</th>
             <th className="text-left px-4 py-3 font-medium text-muted-foreground">Risk</th>
@@ -36,8 +36,8 @@ export function CRTable({ items }: CRTableProps) {
             <tr
               key={cr.id}
               className={cn(
-                "border-b border-border last:border-0 hover:bg-secondary/20 transition-colors",
-                idx % 2 === 0 ? "" : "bg-secondary/10"
+                "border-b border-white/10 last:border-0 transition-colors hover:bg-white/10",
+                idx % 2 === 0 ? "" : "bg-white/5"
               )}
             >
               <td className="px-4 py-3">

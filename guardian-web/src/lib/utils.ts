@@ -18,22 +18,22 @@ export function formatRelativeTime(value: string | Date): string {
 
 export function getRiskBgColor(level: "low" | "med" | "high"): string {
   if (level === "high") {
-    return "bg-red-500/15 text-red-300 border-red-500/30";
+    return "bg-red-500/12 text-red-700 border-red-500/25";
   }
   if (level === "med") {
-    return "bg-yellow-500/15 text-yellow-300 border-yellow-500/30";
+    return "bg-yellow-500/14 text-amber-700 border-yellow-500/25";
   }
-  return "bg-green-500/15 text-green-300 border-green-500/30";
+  return "bg-green-500/12 text-emerald-700 border-green-500/25";
 }
 
 export function getRiskScoreColor(score: number): string {
   if (score >= 70) {
-    return "text-red-400";
+    return "text-red-600";
   }
   if (score >= 40) {
-    return "text-yellow-400";
+    return "text-amber-600";
   }
-  return "text-green-400";
+  return "text-emerald-600";
 }
 
 function toDate(value: string | Date): Date {

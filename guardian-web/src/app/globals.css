@@ -4,41 +4,72 @@
 
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-    --radius: 0.5rem;
+    /* Notion-inspired light palette */
+    --background: 40 23% 96%;
+    --foreground: 24 10% 12%;
+    --card: 40 20% 99%;
+    --card-foreground: 24 10% 12%;
+    --popover: 40 20% 99%;
+    --popover-foreground: 24 10% 12%;
+    --primary: 212 92% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 32 14% 91%;
+    --secondary-foreground: 24 10% 18%;
+    --muted: 35 12% 90%;
+    --muted-foreground: 28 8% 32%;
+    --accent: 34 13% 88%;
+    --accent-foreground: 24 10% 18%;
+    --destructive: 0 78% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 34 11% 82%;
+    --input: 34 11% 84%;
+    --ring: 212 92% 45%;
+    --radius: 0.8rem;
 
-    /* Risk colors */
-    --risk-low: 142.1 76.2% 36.3%;
-    --risk-med: 38 92% 50%;
-    --risk-high: 0 72.2% 50.6%;
+    --risk-low: 145 63% 39%;
+    --risk-med: 38 92% 48%;
+    --risk-high: 0 78% 56%;
 
-    /* Sidebar */
-    --sidebar-background: 224 71.4% 4.1%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217.2 91.2% 59.8%;
-    --sidebar-primary-foreground: 222.2 47.4% 11.2%;
-    --sidebar-accent: 215 27.9% 16.9%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 215 27.9% 16.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 36 20% 97%;
+    --sidebar-foreground: 24 10% 18%;
+    --sidebar-primary: 212 92% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 34 14% 91%;
+    --sidebar-accent-foreground: 24 10% 20%;
+    --sidebar-border: 34 10% 84%;
+    --sidebar-ring: 212 92% 45%;
+  }
+
+  .dark {
+    /* Vercel-inspired dark palette */
+    --background: 0 0% 3%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 92%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 64%;
+    --accent: 0 0% 14%;
+    --accent-foreground: 0 0% 94%;
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 16%;
+    --input: 0 0% 14%;
+    --ring: 0 0% 80%;
+
+    --sidebar-background: 0 0% 4%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 0 0% 98%;
+    --sidebar-primary-foreground: 0 0% 7%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 92%;
+    --sidebar-border: 0 0% 14%;
+    --sidebar-ring: 0 0% 80%;
   }
 }
 
@@ -46,32 +77,60 @@
   * {
     @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-geist-sans), ui-sans-serif, system-ui;
+    @apply bg-background text-foreground antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+    min-height: 100vh;
+    background-image: linear-gradient(180deg, #f8f7f4 0%, #f5f3ef 100%);
+    background-attachment: fixed;
+  }
+
+  .dark body {
+    background-image: linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
   }
 }
 
-/* React Flow custom styles */
+@layer components {
+  .glass-panel {
+    @apply relative overflow-hidden rounded-2xl border bg-card;
+    border-color: hsl(var(--border));
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  }
+
+  .glass-panel::before {
+    content: none;
+  }
+
+  .glass-muted {
+    @apply rounded-xl border bg-card;
+    border-color: hsl(var(--border));
+  }
+
+  .halo-grid {
+    background: transparent;
+  }
+}
+
 .react-flow__node {
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .react-flow__edge-path {
-  stroke: hsl(var(--muted-foreground));
-  stroke-width: 1.5;
+  stroke: rgba(100, 100, 100, 0.7);
+  stroke-width: 1.4;
 }
 
 .react-flow__minimap {
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .react-flow__controls {
   border: 1px solid hsl(var(--border));
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
 }
 

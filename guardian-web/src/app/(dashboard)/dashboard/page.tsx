@@ -4,20 +4,14 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Shell } from "@/components/layout/Shell";
 import { Topbar } from "@/components/layout/Topbar";
+import { PageHero } from "@/components/layout/PageHero";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CRStatusBadge } from "@/components/cr/CRStatusBadge";
 import { fetchCRList } from "@/lib/api/cr";
 import { useIncidentMode } from "@/hooks/useIncidentMode";
 import { cn, formatRelativeTime, getRiskBgColor } from "@/lib/utils";
-import {
-  GitPullRequest,
-  ShieldAlert,
-  CheckCircle,
-  AlertOctagon,
-  TrendingUp,
-  ArrowRight,
-} from "lucide-react";
+import { GitPullRequest, ShieldAlert, CheckCircle, AlertOctagon, ArrowRight, Sparkles } from "lucide-react";
 
 function StatCard({
   title,
@@ -33,15 +27,15 @@ function StatCard({
   className?: string;
 }) {
   return (
-    <Card className={className}>
+    <Card className={cn("transition-all duration-300 hover:-translate-y-1", className)}>
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-3xl font-bold mt-1">{value}</p>
-            {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
+            <p className="mt-1 text-3xl font-semibold text-foreground">{value}</p>
+            {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
           </div>
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+          <div className="glass-muted flex h-10 w-10 items-center justify-center rounded-xl">
             <Icon className="h-5 w-5 text-primary" />
           </div>
         </div>
@@ -61,178 +55,159 @@ export default function DashboardPage() {
 
   const pendingCRs = allCRs?.filter((cr) => cr.status === "pending_approval") ?? [];
   const highRiskCRs = allCRs?.filter((cr) => cr.risk_level === "high") ?? [];
-  const appliedToday = allCRs?.filter((cr) => {
-    const updated = new Date(cr.updated_at);
-    const today = new Date();
-    return cr.status === "applied" && updated.toDateString() === today.toDateString();
-  }) ?? [];
-  const recentCRs = [...(allCRs ?? [])].sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  ).slice(0, 5);
+  const appliedToday =
+    allCRs?.filter((cr) => {
+      const updated = new Date(cr.updated_at);
+      const today = new Date();
+      return cr.status === "applied" && updated.toDateString() === today.toDateString();
+    }) ?? [];
 
-  // Risk heatmap: count by repo and risk level
-  const heatmapData = allCRs?.reduce<Record<string, Record<string, number>>>((acc, cr) => {
-    if (!acc[cr.repo]) acc[cr.repo] = { low: 0, med: 0, high: 0 };
-    acc[cr.repo][cr.risk_level]++;
-    return acc;
-  }, {}) ?? {};
+  const recentCRs = [...(allCRs ?? [])]
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    .slice(0, 6);
+
+  const heatmapData =
+    allCRs?.reduce<Record<string, Record<string, number>>>((acc, cr) => {
+      if (!acc[cr.repo]) acc[cr.repo] = { low: 0, med: 0, high: 0 };
+      acc[cr.repo][cr.risk_level]++;
+      return acc;
+    }, {}) ?? {};
 
   return (
     <>
-      <Topbar
-        title="Dashboard"
-        description="Overview of change requests and system health"
-      />
+      <Topbar title="Dashboard" description="Live posture for HaLoop governance operations" />
       <Shell>
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <PageHero
+          eyebrow="HaLoop Control"
+          title="Decision-grade change governance"
+          description="Monitor approvals, identify risk concentration, and push reviewers to high-impact requests with a clear operational narrative."
+          rightSlot={
+            <div className="glass-muted flex items-center gap-2 rounded-2xl px-3 py-2 text-sm text-muted-foreground">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Last sync: live
+            </div>
+          }
+        />
+
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)
+            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)
           ) : (
             <>
               <StatCard
                 title="Pending Approval"
                 value={pendingCRs.length}
                 icon={GitPullRequest}
-                description="Awaiting reviewer action"
-                className={pendingCRs.length > 0 ? "border-yellow-500/30" : ""}
+                description="Requests waiting for reviewer action"
+                className={pendingCRs.length > 0 ? "border-yellow-400/25" : ""}
               />
               <StatCard
-                title="High Risk CRs"
+                title="High Risk"
                 value={highRiskCRs.length}
                 icon={ShieldAlert}
-                description="Risk score ≥ 70"
-                className={highRiskCRs.length > 0 ? "border-red-500/30" : ""}
+                description="Risk score >= 70"
+                className={highRiskCRs.length > 0 ? "border-red-400/25" : ""}
               />
-              <StatCard
-                title="Applied Today"
-                value={appliedToday.length}
-                icon={CheckCircle}
-                description="Successfully merged"
-              />
+              <StatCard title="Applied Today" value={appliedToday.length} icon={CheckCircle} description="Merged without rollback" />
               <StatCard
                 title="Incident Mode"
-                value={isIncidentMode ? "ACTIVE" : "Normal"}
+                value={isIncidentMode ? "ACTIVE" : "NORMAL"}
                 icon={AlertOctagon}
-                description={isIncidentMode ? "Approvals suspended" : "System operating normally"}
-                className={isIncidentMode ? "border-red-500/50 bg-red-950/20" : ""}
+                description={isIncidentMode ? "Approval actions paused" : "All systems normal"}
+                className={isIncidentMode ? "border-red-500/45 bg-red-500/10" : ""}
               />
             </>
           )}
-        </div>
+        </section>
 
-        {/* Recent CRs + Risk Heatmap */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Recent CRs */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    Recent Change Requests
-                  </CardTitle>
-                  <Link href="/cr" className="flex items-center gap-1 text-xs text-primary hover:underline">
-                    View all <ArrowRight className="h-3 w-3" />
-                  </Link>
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <Card className="xl:col-span-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Recent Change Requests</CardTitle>
+                <Link href="/cr" className="flex items-center gap-1 text-xs text-primary transition-opacity hover:opacity-80">
+                  View all
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isLoading ? (
+                <div className="space-y-3 p-6">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-12 rounded-xl" />
+                  ))}
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {isLoading ? (
-                  <div className="p-6 space-y-3">
-                    {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12" />)}
-                  </div>
-                ) : recentCRs.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-muted-foreground">No change requests yet.</div>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {recentCRs.map((cr) => (
-                      <Link
-                        key={cr.id}
-                        href={`/cr/${cr.id}`}
-                        className="flex items-center gap-3 px-6 py-3 hover:bg-secondary/20 transition-colors"
-                      >
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold",
-                            getRiskBgColor(cr.risk_level)
-                          )}
-                        >
-                          {cr.risk_score}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{cr.title}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{cr.repo}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <CRStatusBadge status={cr.status} />
-                          <span className="text-xs text-muted-foreground hidden sm:block">
-                            {formatRelativeTime(cr.updated_at)}
-                          </span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+              ) : recentCRs.length === 0 ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">No change requests yet.</div>
+              ) : (
+                <div className="divide-y divide-white/10">
+                  {recentCRs.map((cr) => (
+                    <Link
+                      key={cr.id}
+                      href={`/cr/${cr.id}`}
+                      className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-white/5"
+                    >
+                      <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold", getRiskBgColor(cr.risk_level))}>
+                        {cr.risk_score}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{cr.title}</p>
+                        <p className="truncate font-mono text-xs text-muted-foreground">{cr.repo}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <CRStatusBadge status={cr.status} />
+                        <span className="hidden text-xs text-muted-foreground sm:block">{formatRelativeTime(cr.updated_at)}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Risk Heatmap */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Risk Heatmap</CardTitle>
+              <CardTitle className="text-lg">Risk Distribution</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 rounded-xl" />
+                  ))}
                 </div>
               ) : Object.keys(heatmapData).length === 0 ? (
                 <p className="text-sm text-muted-foreground">No data available.</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {Object.entries(heatmapData).map(([repo, counts]) => (
-                    <div key={repo}>
-                      <p className="text-xs font-mono text-muted-foreground mb-1.5 truncate">{repo}</p>
-                      <div className="flex gap-1 h-8">
+                    <div key={repo} className="space-y-2">
+                      <p className="truncate font-mono text-xs text-muted-foreground">{repo}</p>
+                      <div className="flex h-8 gap-1">
                         {counts.high > 0 && (
-                          <div
-                            className="rounded bg-red-500/70 flex items-center justify-center text-[10px] text-white font-bold transition-all"
-                            style={{ flex: counts.high }}
-                          >
+                          <div className="flex items-center justify-center rounded bg-red-500/75 text-[10px] font-bold text-white" style={{ flex: counts.high }}>
                             {counts.high}H
                           </div>
                         )}
                         {counts.med > 0 && (
-                          <div
-                            className="rounded bg-yellow-500/70 flex items-center justify-center text-[10px] text-white font-bold"
-                            style={{ flex: counts.med }}
-                          >
+                          <div className="flex items-center justify-center rounded bg-yellow-500/75 text-[10px] font-bold text-white" style={{ flex: counts.med }}>
                             {counts.med}M
                           </div>
                         )}
                         {counts.low > 0 && (
-                          <div
-                            className="rounded bg-green-500/70 flex items-center justify-center text-[10px] text-white font-bold"
-                            style={{ flex: counts.low }}
-                          >
+                          <div className="flex items-center justify-center rounded bg-green-500/75 text-[10px] font-bold text-white" style={{ flex: counts.low }}>
                             {counts.low}L
                           </div>
                         )}
                       </div>
                     </div>
                   ))}
-                  <div className="flex items-center gap-3 mt-4 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1"><div className="h-3 w-3 rounded bg-red-500/70" />High</div>
-                    <div className="flex items-center gap-1"><div className="h-3 w-3 rounded bg-yellow-500/70" />Med</div>
-                    <div className="flex items-center gap-1"><div className="h-3 w-3 rounded bg-green-500/70" />Low</div>
-                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
-        </div>
+        </section>
       </Shell>
     </>
   );

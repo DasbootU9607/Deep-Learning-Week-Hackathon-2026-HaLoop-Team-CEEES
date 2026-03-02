@@ -2,6 +2,7 @@
 
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface TopbarProps {
   title: string;
@@ -11,17 +12,20 @@ interface TopbarProps {
 
 export function Topbar({ title, description, children }: TopbarProps) {
   return (
-    <header className="flex items-center justify-between border-b border-border px-6 py-4 bg-background">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">{title}</h1>
-        {description && <p className="text-sm text-muted-foreground mt-0.5">{description}</p>}
-      </div>
-      <div className="flex items-center gap-3">
-        {children}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary" />
-        </Button>
+    <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-4 sm:px-6 lg:px-10">
+      <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground lg:text-2xl">{title}</h1>
+          {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          {children}
+          <ThemeToggle />
+          <Button variant="ghost" size="icon" className="relative rounded-xl border border-border bg-card hover:bg-accent">
+            <Bell className="h-4 w-4" />
+            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />
+          </Button>
+        </div>
       </div>
     </header>
   );

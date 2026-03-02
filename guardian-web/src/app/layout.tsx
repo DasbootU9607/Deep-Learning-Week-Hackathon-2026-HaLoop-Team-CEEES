@@ -16,13 +16,13 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "GUARDIAN — Change Control",
-  description: "Enterprise change request management and risk analysis platform",
+  title: "HaLoop - AI Governance Dashboard",
+  description: "HaLoop governance dashboard for AI change control and risk operations",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <Providers>{children}</Providers>
       </body>
