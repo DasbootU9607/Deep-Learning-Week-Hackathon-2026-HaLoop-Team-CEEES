@@ -11,6 +11,8 @@ This directory contains operational documentation that supplements module README
   - submission-focused methodology, results, observations, and findings
 - `../testbench/`
   - grader-oriented setup/run and validation scenarios
+- `../video_all_info.md`
+  - submission video compliance checklist, content plan, and sample scripts
 
 ## Documentation Rules
 
