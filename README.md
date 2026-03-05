@@ -112,27 +112,27 @@ Primary editable architecture source: `docs/mermaid.md`
 ### Screenshots
 
 **Main Dashboard**  
-<img src="./photo/Frontpage.png" width="450">  
+<img src="./.github/assets/Frontpage.png" width="450">  
 *Central hub for tracking AI-generated change requests and approval statuses.*
 
 **Policy Management**  
-<img src="./photo/Policies.png" width="450">  
+<img src="./.github/assets/Policies.png" width="450">  
 *Define security boundaries and automated human review triggers.*
 
 **Audit Trail**  
-<img src="./photo/Audit.png" width="450">  
+<img src="./.github/assets/Audit.png" width="450">  
 *Comprehensive logs of all AI interactions and governance decisions.*
 
 **VS Code Plugin Integration**  
-<img src="./photo/Plugin.png" width="450">  
+<img src="./.github/assets/Plugin.png" width="450">  
 *In-IDE guidance showing real-time risk levels and pending approvals.*
 
 **Backend Processing Logs**  
-<img src="./photo/console.png" width="450">  
+<img src="./.github/assets/console.png" width="450">  
 *Technical view of the risk evaluation engine and state transitions.*
 
 **System Governance Control**  
-<img src="./photo/Control.png" width="450">  
+<img src="./.github/assets/Control.png" width="450">  
 *Admin overrides for global security locks and emergency incident response.*
 
 ## Dependency Checklist (Computer-Agnostic)
