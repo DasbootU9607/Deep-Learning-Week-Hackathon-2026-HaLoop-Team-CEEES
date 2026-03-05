@@ -111,6 +111,31 @@ flowchart LR
 
 Primary editable architecture source: `docs/mermaid.md`
 
+## Preview
+
+### Demo Video
+[![HaLoop Demo](https://img.youtube.com/vi/cy96VRtIqiA/0.jpg)](https://www.youtube.com/watch?v=cy96VRtIqiA&t=32s)
+
+### Screenshots
+
+**Front Page**
+![Front Page](./photo/Frontpage.png)
+
+**Policies**
+![Policies](./photo/Policies.png)
+
+**Audit Log**
+![Audit Log](./photo/Audit.png)
+
+**Plugin Interface**
+![Plugin](./photo/Plugin.png)
+
+**Console**
+![Console](./photo/console.png)
+
+**Control Panel**
+![Control Panel](./photo/Control.png)
+
 ## Dependency Checklist (Computer-Agnostic)
 
 ### Required
