@@ -6,7 +6,6 @@ Track 1 implementation: a safe, human-governed AI coding agent with:
 
 - `ide-plugin/`: VS Code extension for AI tasks + local guardrails
 - `guardian-web/`: dashboard and backend APIs for approvals, incident mode, policy, audit
-- `demo/`: end-to-end demo scripts and scripted scenarios
 - `sqlite/`: SQLite schema for backend mirror persistence
 
 ## Start Here
@@ -16,9 +15,6 @@ Module-specific details live in:
 
 - `guardian-web/README.md`
 - `ide-plugin/README.md`
-- `demo/README.md`
-
-Historical planning material is in `Planning/` and is not the source of truth for current runtime setup.
 
 ## Documentation Map
 
@@ -29,12 +25,9 @@ Historical planning material is in `Planning/` and is not the source of truth fo
 - `testbench/test-cases.md`: structured manual validation scenarios and expected behavior
 - `guardian-web/README.md`: dashboard/backend module guide
 - `ide-plugin/README.md`: extension module guide
-- `demo/README.md`: demo execution guide
-- `demo/USECASES.md`: scripted live demo path
 - `docs/backend-storage-features.md`: storage feature mapping (legacy Supabase intent -> SQLite implementation)
 - `docs/mermaid.md`: architecture diagram (Mermaid source for documentation and GitHub rendering)
 - `docs/README.md`: docs index/maintenance notes
-- `Planning/README.md`: index of historical planning docs
 
 ## Architecture Diagram
 
@@ -118,23 +111,29 @@ Primary editable architecture source: `docs/mermaid.md`
 
 ### Screenshots
 
-**Front Page**
-![Front Page](./photo/Frontpage.png)
+**Main Dashboard**  
+<img src="./photo/Frontpage.png" width="450">  
+*Central hub for tracking AI-generated change requests and approval statuses.*
 
-**Policies**
-![Policies](./photo/Policies.png)
+**Policy Management**  
+<img src="./photo/Policies.png" width="450">  
+*Define security boundaries and automated human review triggers.*
 
-**Audit Log**
-![Audit Log](./photo/Audit.png)
+**Audit Trail**  
+<img src="./photo/Audit.png" width="450">  
+*Comprehensive logs of all AI interactions and governance decisions.*
 
-**Plugin Interface**
-![Plugin](./photo/Plugin.png)
+**VS Code Plugin Integration**  
+<img src="./photo/Plugin.png" width="450">  
+*In-IDE guidance showing real-time risk levels and pending approvals.*
 
-**Console**
-![Console](./photo/console.png)
+**Backend Processing Logs**  
+<img src="./photo/console.png" width="450">  
+*Technical view of the risk evaluation engine and state transitions.*
 
-**Control Panel**
-![Control Panel](./photo/Control.png)
+**System Governance Control**  
+<img src="./photo/Control.png" width="450">  
+*Admin overrides for global security locks and emergency incident response.*
 
 ## Dependency Checklist (Computer-Agnostic)
 
@@ -156,11 +155,6 @@ Reason for Node 22: backend mirror uses Node built-in `node:sqlite`.
 Needed by:
 
 - `guardian-web/scripts/test-integration-flow.sh`
-- `demo/scripts/*.sh`
-
-### Optional
-
-- VS Code CLI `code` in PATH (used by `demo/scripts/open-plugin-dev-host.sh`)
 
 ## Verify Toolchain
 
@@ -214,14 +208,6 @@ npm run build
 
 ### 3) Start extension development host
 
-Option A (script):
-
-```bash
-bash demo/scripts/open-plugin-dev-host.sh
-```
-
-Option B (manual):
-
 1. Open `ide-plugin/` in VS Code.
 2. Press `F5`.
 3. Run `Extension` launch target.
@@ -243,10 +229,6 @@ Option B (manual):
 - `http://localhost:3000/api`
 
 The plugin normalizes both.
-
-### 5) Run demo scenarios
-
-Follow `demo/USECASES.md`.
 
 ## SQLite Backend Mirror
 
@@ -307,12 +289,6 @@ BASE_URL=http://localhost:3000 npm run test:integration
 ```
 
 ## Reset State
-
-Reset local mock CR/audit store:
-
-```bash
-bash demo/scripts/reset-demo-state.sh
-```
 
 Reset SQLite mirror:
 

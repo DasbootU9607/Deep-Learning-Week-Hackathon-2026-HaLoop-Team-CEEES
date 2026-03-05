@@ -1,1 +1,0 @@
-Update package.json dependencies and modify auth permissions logic.
