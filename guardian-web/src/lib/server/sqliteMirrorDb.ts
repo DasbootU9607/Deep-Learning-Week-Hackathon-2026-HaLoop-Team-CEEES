@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { isProdBackendMode } from "@/lib/server/backendMode";
 
 type SqliteStatement = {
   run: (...params: unknown[]) => unknown;
@@ -23,7 +24,7 @@ interface CompactAuditRow {
 let cachedDb: SqliteDatabase | undefined;
 
 export function isSqliteMirrorAvailable(): boolean {
-  return true;
+  return !isProdBackendMode();
 }
 
 export function upsertProfile(params: {

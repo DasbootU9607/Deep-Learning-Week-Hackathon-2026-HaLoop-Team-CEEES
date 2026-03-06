@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { generatePlanForGoal } from "@/lib/server/backendPlan";
-import { persistStandalonePlanRequest } from "@/lib/server/backendMirror";
-import { approvalRequestSchema } from "@/lib/server/contracts";
-import { createApprovalTicket, saveGeneratedPlan } from "@/lib/server/dataStore";
+import { executePlanGeneration } from "@/lib/server/planExecution";
+import { enqueuePlanJob, isPlanQueueEnabled } from "@/lib/server/planQueue";
+import { resolveRequestId, REQUEST_ID_HEADER } from "@/lib/server/requestId";
 
 export const runtime = "nodejs";
 
@@ -15,71 +14,77 @@ const planRequestSchema = z.object({
   activeFile: z.string().trim().min(1).optional(),
   selectedText: z.string().optional(),
   openTabs: z.array(z.string()).optional(),
+  async: z.boolean().optional(),
+  provider: z.enum(["auto", "heuristic", "openai"]).optional(),
 });
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const requestId = resolveRequestId(request);
   try {
     const parsed = planRequestSchema.safeParse(await readJson(request));
     if (!parsed.success) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: "Invalid request body", details: parsed.error.flatten() },
         { status: 400 },
       );
+      response.headers.set(REQUEST_ID_HEADER, requestId);
+      return response;
     }
 
     const input = parsed.data;
-    const result = await generatePlanForGoal({
+    const shouldQueue =
+      isPlanQueueEnabled() && (input.async === true || input.goal.trim().length >= 240);
+
+    if (shouldQueue) {
+      const job = await enqueuePlanJob({
+        goal: input.goal,
+        requestedBy: input.requestedBy,
+        workspaceRoot: input.workspaceRoot,
+        branch: input.branch,
+        activeFile: input.activeFile,
+        selectedText: input.selectedText,
+        openTabs: input.openTabs,
+        requestId,
+        preferBackground: true,
+        provider: input.provider,
+      });
+
+      const response = NextResponse.json(
+        {
+          jobId: String(job.id),
+          status: "queued",
+          statusUrl: `/api/jobs/${encodeURIComponent(String(job.id))}`,
+          requestId,
+        },
+        { status: 202 },
+      );
+      response.headers.set(REQUEST_ID_HEADER, requestId);
+      return response;
+    }
+
+    const result = await executePlanGeneration({
       goal: input.goal,
+      requestedBy: input.requestedBy,
       workspaceRoot: input.workspaceRoot,
       branch: input.branch,
       activeFile: input.activeFile,
       selectedText: input.selectedText,
       openTabs: input.openTabs,
+      requestId,
+      preferBackground: false,
+      provider: input.provider,
     });
 
-    await saveGeneratedPlan({
-      request: result.request,
-      response: result.response,
-    });
-
-    const persistedId =
-      (await persistStandalonePlanRequest({
-        goal: input.goal,
-        planPayload: result.compactPlan,
-        riskScore: result.response.backendRisk.score,
-        riskReasons: result.response.backendRisk.reasons,
-        requestedBy: input.requestedBy,
-        branchName: result.request.context.branch,
-      })) ?? result.response.planId;
-
-    if (result.response.backendRisk.score >= 70) {
-      const approval = approvalRequestSchema.parse({
-        approvalId: persistedId,
-        planId: result.response.planId,
-        sessionId: result.request.sessionId,
-        requestedBy: input.requestedBy?.trim() || "api-user",
-        risk: {
-          score: result.response.backendRisk.score,
-          level: "high",
-          reasons: result.response.backendRisk.reasons,
-        },
-        blastRadius: {
-          files: result.response.changes.map((change) => change.path),
-          commandCount: result.response.proposedCommands.length,
-        },
-        createdAt: new Date().toISOString(),
-      });
-
-      await createApprovalTicket(approval);
-    }
-
-    return NextResponse.json({
-      plan: result.compactPlan,
-      riskScore: result.riskScore,
-      id: persistedId,
-    });
+    const response = NextResponse.json(result);
+    response.headers.set(REQUEST_ID_HEADER, requestId);
+    return response;
   } catch (error) {
-    return NextResponse.json({ error: toErrorMessage(error) }, { status: 500 });
+    const response = NextResponse.json(
+      { error: toErrorMessage(error), requestId },
+      { status: 500 },
+    );
+    response.headers.set(REQUEST_ID_HEADER, requestId);
+    return response;
   }
 }
 

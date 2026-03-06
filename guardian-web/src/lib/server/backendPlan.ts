@@ -7,6 +7,7 @@ import {
 } from "@/lib/server/contracts";
 import { getActivePolicy } from "@/lib/server/dataStore";
 import { generatePlanFromPrompt } from "@/lib/server/planningEngine";
+import { generatePlanWithReliability, isOpenAIPlannerEnabled } from "@/lib/server/openaiReliability";
 
 export interface GoalPlanOptions {
   goal: string;
@@ -16,6 +17,9 @@ export interface GoalPlanOptions {
   selectedText?: string;
   openTabs?: string[];
   sessionId?: string;
+  requestId?: string;
+  preferBackground?: boolean;
+  provider?: "heuristic" | "openai" | "auto";
 }
 
 export interface GoalPlanResult {
@@ -23,6 +27,7 @@ export interface GoalPlanResult {
   response: GeneratePlanResponse;
   compactPlan: Record<string, unknown>;
   riskScore: number;
+  provider: "heuristic" | "openai";
 }
 
 export async function generatePlanForGoal(options: GoalPlanOptions): Promise<GoalPlanResult> {
@@ -39,7 +44,14 @@ export async function generatePlanForGoal(options: GoalPlanOptions): Promise<Goa
   });
 
   const policy = await getActivePolicy();
-  const generated = generatePlanFromPrompt(payload, policy);
+  const provider = resolveProvider(options.provider);
+  const generated = await generateWithFallback({
+    provider,
+    payload,
+    policy,
+    requestId: options.requestId,
+    preferBackground: options.preferBackground,
+  });
   const response = generatePlanResponseSchema.parse(generated);
 
   return {
@@ -47,7 +59,50 @@ export async function generatePlanForGoal(options: GoalPlanOptions): Promise<Goa
     response,
     compactPlan: toCompactPlan(options.goal, response),
     riskScore: response.backendRisk.score / 100,
+    provider: generated.provider,
   };
+}
+
+async function generateWithFallback(params: {
+  provider: "heuristic" | "openai";
+  payload: GeneratePlanRequest;
+  policy: Awaited<ReturnType<typeof getActivePolicy>>;
+  requestId?: string;
+  preferBackground?: boolean;
+}): Promise<GeneratePlanResponse & { provider: "heuristic" | "openai" }> {
+  if (params.provider === "openai") {
+    try {
+      const response = await generatePlanWithReliability({
+        request: params.payload,
+        policy: params.policy,
+        requestId: params.requestId,
+        preferBackground: params.preferBackground,
+      });
+      return { ...response, provider: "openai" };
+    } catch (error) {
+      if (String(process.env.OPENAI_FALLBACK_TO_HEURISTIC ?? "true").toLowerCase() !== "true") {
+        throw error;
+      }
+    }
+  }
+
+  const fallback = generatePlanFromPrompt(params.payload, params.policy);
+  return { ...fallback, provider: "heuristic" };
+}
+
+function resolveProvider(provider: GoalPlanOptions["provider"]): "heuristic" | "openai" {
+  if (provider === "heuristic" || provider === "openai") {
+    return provider;
+  }
+
+  const configured = String(process.env.PLANNER_PROVIDER ?? "auto").trim().toLowerCase();
+  if (configured === "heuristic") {
+    return "heuristic";
+  }
+  if (configured === "openai") {
+    return "openai";
+  }
+  return isOpenAIPlannerEnabled() ? "openai" : "heuristic";
 }
 
 function toCompactPlan(goal: string, response: GeneratePlanResponse): Record<string, unknown> {

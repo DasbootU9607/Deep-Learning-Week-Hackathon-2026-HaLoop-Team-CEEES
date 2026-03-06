@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-03-06T15:09:06.044Z",
+  "rows": [
+    {
+      "label": "Before (heuristic)",
+      "provider": "heuristic",
+      "metrics": {
+        "schemaValidRate": 1,
+        "highRiskRecall": 0.75,
+        "approvalRecall": 0.75,
+        "reasonCoverage": 0.667,
+        "avgLatencyMs": 3
+      }
+    },
+    {
+      "label": "After (auto)",
+      "provider": "auto",
+      "metrics": {
+        "schemaValidRate": 1,
+        "highRiskRecall": 0.75,
+        "approvalRecall": 0.75,
+        "reasonCoverage": 0.667,
+        "avgLatencyMs": 497
+      }
+    }
+  ]
+}

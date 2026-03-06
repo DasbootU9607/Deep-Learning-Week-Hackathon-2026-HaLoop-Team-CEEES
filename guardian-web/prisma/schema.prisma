@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model StoredPlan {
+  planId       String   @id @map("plan_id")
+  requestJson  Json     @map("request_json")
+  responseJson Json     @map("response_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("stored_plans")
+}
+
+model ApprovalTicket {
+  approvalId   String   @id @map("approval_id")
+  requestJson  Json     @map("request_json")
+  crId         String   @map("cr_id")
+  status       String
+  decisionJson Json?    @map("decision_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([crId])
+  @@index([status])
+  @@map("approval_tickets")
+}
+
+model ChangeRequest {
+  id                String   @id
+  repo              String
+  branch            String
+  title             String
+  description       String?
+  createdAt         DateTime @map("created_at")
+  updatedAt         DateTime @map("updated_at")
+  createdBy         String   @map("created_by")
+  createdByName     String   @map("created_by_name")
+  status            String
+  riskScore         Int      @map("risk_score")
+  riskLevel         String   @map("risk_level")
+  plan              String?
+  patchSummaryJson  Json     @map("patch_summary_json")
+  blastRadiusJson   Json     @map("blast_radius_json")
+  evidenceJson      Json     @map("evidence_json")
+  approvalsJson     Json     @map("approvals_json")
+  requiredApprovals Int      @map("required_approvals")
+  prUrl             String?  @map("pr_url")
+  commitSha         String?  @map("commit_sha")
+  labelsJson        Json     @map("labels_json")
+
+  @@index([status])
+  @@index([riskScore])
+  @@index([repo])
+  @@index([updatedAt])
+  @@map("change_requests")
+}
+
+model AuditEntry {
+  id            String   @id
+  timestamp     DateTime
+  actorId       String   @map("actor_id")
+  actorName     String   @map("actor_name")
+  actorAvatar   String?  @map("actor_avatar")
+  action        String
+  targetCrId    String?  @map("target_cr_id")
+  targetCrTitle String?  @map("target_cr_title")
+  targetPolicyId String? @map("target_policy_id")
+  detailsJson   Json?    @map("details_json")
+  ipAddress     String?  @map("ip_address")
+  riskLevel     String?  @map("risk_level")
+
+  @@index([timestamp])
+  @@index([action])
+  @@index([riskLevel])
+  @@index([targetCrId])
+  @@map("audit_entries")
+}
+
+model PolicyState {
+  id                String   @id
+  name              String
+  version           Int
+  isActive          Boolean  @map("is_active")
+  pathRulesJson     Json     @map("path_rules_json")
+  riskThresholdsJson Json    @map("risk_thresholds_json")
+  rolePermissionsJson Json   @map("role_permissions_json")
+  createdAt         DateTime @map("created_at")
+  updatedAt         DateTime @map("updated_at")
+  createdBy         String   @map("created_by")
+
+  @@map("policy_states")
+}
+
+model IncidentState {
+  id             String    @id
+  isIncidentMode Boolean   @map("is_incident_mode")
+  activatedAt    DateTime? @map("activated_at")
+  activatedBy    String?   @map("activated_by")
+  reason         String?
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("incident_states")
+}
+

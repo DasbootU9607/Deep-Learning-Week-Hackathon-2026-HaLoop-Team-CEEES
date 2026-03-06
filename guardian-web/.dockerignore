@@ -1,0 +1,6 @@
+node_modules
+.next
+.data
+eval-results
+npm-debug.log
+

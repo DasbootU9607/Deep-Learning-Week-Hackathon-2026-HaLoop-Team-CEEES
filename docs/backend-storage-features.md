@@ -1,50 +1,42 @@
-# Backend Storage Feature Notes (Supabase -> SQLite)
+# Backend Storage Feature Notes (Demo + Prod)
 
-This project previously mirrored backend data to Supabase. That mirror has been replaced with a local SQLite mirror while preserving the same feature intent.
+This project now supports two backend storage modes.
 
-## Retained Features
+## Mode 1: Demo (`BACKEND_MODE=demo`)
 
-1. Approval request persistence
-- Stores plan metadata, risk score, risk level, status, touched files, and policy hits.
-- Supports upsert by `approvalId` so plugin retries are idempotent.
+Primary store:
 
-2. Reviewer decision tracking
-- Persists `approved`, `rejected`, and `changes_requested` outcomes.
-- Updates approval request status and timestamp.
+- `guardian-web/.data/integration-store.json`
 
-3. Audit trail
-- Appends audit records for:
-  - approval request creation
-  - approval status updates
-  - plan generation through `/api/ai/plan`
-- Supports compact audit read model for backend consumers.
+Compatibility mirror:
 
-4. Actor identity normalization
-- Keeps lightweight `profiles` table.
-- Derives deterministic local email from display name.
-- Upserts actor profile before writing approval/audit rows.
+- `guardian-web/.data/backend-mirror.sqlite`
+- schema: `sqlite/migrations/0001_init.sql`
 
-5. Risk metadata continuity
-- Stores 0-100 risk score and mapped risk level (`low`, `med`, `high`, `critical`).
-- Preserves backend risk reasons and policy-hit context.
+Use this mode for stable hackathon demos with deterministic local data.
 
-## SQLite Storage Location
+## Mode 2: Prod (`BACKEND_MODE=prod`)
 
-- Default path: `guardian-web/.data/backend-mirror.sqlite`
-- Override with env var: `SQLITE_DB_PATH`
+Primary store:
 
-## Schema Source
+- PostgreSQL via Prisma
+- schema: `guardian-web/prisma/schema.prisma`
+- migrations: `guardian-web/prisma/migrations/`
 
-- Canonical migration for SQLite mirror:
-  - `sqlite/migrations/0001_init.sql`
+Async execution:
 
-## Current API Compatibility
+- Redis + BullMQ worker queue for long-running plan jobs
+- retries + exponential backoff + dead-letter queue
 
-The following routes continue working with SQLite-backed mirror persistence:
+## Retained Functional Capabilities
 
-- `POST /approvals`
-- `GET /approvals/:approvalId/decision`
-- `GET /approvals/:approvalId/events`
-- `POST /api/approvals`
-- `POST /api/ai/plan`
-- `GET /api/audit?view=compact`
+1. Approval request persistence and idempotent replay behavior.
+2. Reviewer decision tracking (`approved`, `rejected`, `changes_requested`).
+3. Audit trail for plan generation and approval lifecycle events.
+4. Risk metadata continuity (score, level, reasons, policy context).
+5. Incident mode and policy configuration persistence.
+
+## Runtime Notes
+
+- In `prod` mode, SQLite mirror writes are disabled so Postgres remains the single source of truth.
+- In `demo` mode, existing compatibility behavior is preserved.

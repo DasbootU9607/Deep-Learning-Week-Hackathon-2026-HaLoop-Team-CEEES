@@ -6,7 +6,13 @@ Track 1 implementation: a safe, human-governed AI coding agent with:
 
 - `ide-plugin/`: VS Code extension for AI tasks + local guardrails
 - `guardian-web/`: dashboard and backend APIs for approvals, incident mode, policy, audit
-- `sqlite/`: SQLite schema for backend mirror persistence
+- `sqlite/`: SQLite schema for demo/compatibility mirror persistence
+
+Backend now supports:
+
+- `BACKEND_MODE=demo`: JSON + SQLite mirror
+- `BACKEND_MODE=prod`: Postgres (Prisma) + Redis/BullMQ + async plan worker
+- OpenAI structured planning reliability layer + eval gate + OTel hook
 
 ## Start Here
 
@@ -26,6 +32,7 @@ Module-specific details live in:
 - `guardian-web/README.md`: dashboard/backend module guide
 - `ide-plugin/README.md`: extension module guide
 - `docs/backend-storage-features.md`: storage feature mapping (legacy Supabase intent -> SQLite implementation)
+- `docs/backend-eval-benchmarks.md`: eval-gate benchmark table (before/after)
 - `docs/mermaid.md`: architecture diagram (Mermaid source for documentation and GitHub rendering)
 - `docs/README.md`: docs index/maintenance notes
 
@@ -189,6 +196,16 @@ Set-Location ..
 ```
 
 ## Run Locally
+
+### Fast Judge Path (Docker Compose)
+
+From repo root:
+
+```bash
+docker compose up --build
+```
+
+This launches `guardian-web`, `guardian-worker`, `postgres`, and `redis`.
 
 ### 1) Start dashboard/backend
 

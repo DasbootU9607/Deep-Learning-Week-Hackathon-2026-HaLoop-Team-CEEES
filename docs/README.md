@@ -5,8 +5,9 @@ This directory contains operational documentation that supplements module README
 ## Current Docs
 
 - `backend-storage-features.md`
-  - maps legacy storage intent to current SQLite implementation
-  - lists retained persistence/audit features
+  - describes demo/prod storage modes and persistence behavior
+- `backend-eval-benchmarks.md`
+  - generated benchmark table from `guardian-web` eval gate runs
 - `../project_documentation.md`
   - submission-focused methodology, results, observations, and findings
 - `../testbench/`

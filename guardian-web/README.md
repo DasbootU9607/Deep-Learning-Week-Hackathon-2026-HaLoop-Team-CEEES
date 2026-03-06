@@ -2,21 +2,34 @@
 
 `guardian-web` is the dashboard + backend API service for governance workflows.
 
-It provides:
+It now supports two backend modes:
+
+- `demo` mode: JSON integration store + SQLite compatibility mirror (fast local demo)
+- `prod` mode: Postgres (Prisma) as source of truth + Redis/BullMQ worker queue
+
+## Core Features
 
 - CR listing/detail pages
 - approval/reject/request-changes actions
 - incident mode and policy management
 - audit views
-- backend routes used by `ide-plugin`
-- SQLite mirror persistence for backend-compatibility records
+- plugin-facing approval and plan endpoints
+- async plan jobs with retries, backoff, and dead-letter queue
+- OpenAI structured output planning with reliability fallback
+- request/job IDs and OpenTelemetry instrumentation hook
+- eval gate with benchmark table generation
 
 ## Prerequisites
 
 - Node.js `22.x`
 - npm
 
-Optional for script-based integration checks:
+For `prod` mode:
+
+- PostgreSQL
+- Redis
+
+Optional for integration script:
 
 - `bash`
 - `curl`
@@ -27,15 +40,39 @@ Optional for script-based integration checks:
 
 ```bash
 npm ci
+npm run prisma:generate
 ```
 
 ## Run
+
+### Demo mode (default)
 
 ```bash
 npm run dev
 ```
 
+### Prod mode (local infra already running)
+
+```bash
+BACKEND_MODE=prod DATABASE_URL=postgresql://postgres:postgres@localhost:5432/guardian REDIS_URL=redis://localhost:6379 npm run dev
+```
+
 Default URL: `http://localhost:3000`
+
+## Docker Compose (Recommended for Judges)
+
+From repo root:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- `guardian-web` (Next.js backend/UI)
+- `guardian-worker` (BullMQ worker)
+- `postgres`
+- `redis`
 
 ## Build and Lint
 
@@ -46,24 +83,44 @@ npm run build
 
 ## Data Storage
 
-### Local integration store
+### Demo mode
 
-- file: `.data/integration-store.json`
-- purpose: primary mock CR/policy/audit store used by dashboard workflows
+- `.data/integration-store.json` (primary demo store)
+- `.data/backend-mirror.sqlite` (compatibility mirror)
 
-### SQLite backend mirror
+### Prod mode
 
-- file: `.data/backend-mirror.sqlite` (default)
-- override: `SQLITE_DB_PATH`
-- purpose: persistence layer for backend compatibility API flows (`/api/ai/plan`, `/api/approvals`, compact audit)
+- PostgreSQL via Prisma schema: `prisma/schema.prisma`
+- migrations: `prisma/migrations/`
 
-Schema reference:
+Migration command:
 
-- `../sqlite/migrations/0001_init.sql`
+```bash
+npm run prisma:migrate:deploy
+```
 
-Feature mapping reference:
+## Queue + Worker
 
-- `../docs/backend-storage-features.md`
+Start worker locally:
+
+```bash
+npm run worker
+```
+
+Queue settings are controlled by env vars in `.env.example`.
+
+## Eval Gate + Benchmarks
+
+Run evals and enforce minimum thresholds:
+
+```bash
+npm run eval:gate
+```
+
+Benchmark output:
+
+- `../docs/backend-eval-benchmarks.md`
+- `eval-results/latest-agent-evals.json`
 
 ## Key Routes
 
@@ -87,31 +144,23 @@ Feature mapping reference:
 - `GET /api/policy/active`
 - `PUT /api/policy/path-rules`
 
-### Compatibility routes
+### AI plan + async job routes
 
 - `POST /api/ai/plan`
+- `GET /api/jobs/:jobId`
+- `POST /api/openai/webhook`
+
+### Compatibility routes
+
 - `POST /api/approvals`
 - `GET /api/audit?view=compact`
 
 ## Integration Test Script
 
-Run with dashboard dev server already up:
+Run with dashboard server already up:
 
 ```bash
 BASE_URL=http://localhost:3000 npm run test:integration
 ```
 
-Script file:
-
-- `scripts/test-integration-flow.sh`
-
-## Reset Local Demo State
-
-From repo root:
-
-```bash
-bash demo/scripts/reset-demo-state.sh
-```
-
-This resets `.data/integration-store.json`.
-If needed, also delete `.data/backend-mirror.sqlite`.
+Script file: `scripts/test-integration-flow.sh`
