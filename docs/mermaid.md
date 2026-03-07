@@ -1,80 +1,126 @@
-# HaLoop Architecture (Novelty-Focused)
+# HaLoop Architecture
 
-This diagram highlights the innovative governance features documented in project READMEs:
+This Mermaid source reflects the current runtime architecture in this repository:
 
-- human-governed AI workflow
-- local risk guardrails in the IDE plugin
-- high-risk approval gating
-- incident mode control
-- Dead Man's Switch rollback
-- audit visibility
-- SQLite backend mirror compatibility
+- IDE plugin context collection, local risk gating, apply, and rollback flow
+- Guardian Web reviewer dashboard and governance APIs
+- synchronous plugin planning plus async queued plan generation
+- demo/prod persistence split with SQLite mirror compatibility
+- OpenAI reliability, request tracing, incident control, and audit flow
 
 ```mermaid
 flowchart LR
-    subgraph Client_Layer["User Interface"]
-        USER["Developer / Reviewer"]
-        WEB["Guardian Web UI (Next.js)"]
-        PLUGIN["VS Code IDE Plugin"]
+    DEV["Developer<br/>VS Code extension host"]
+    REVIEWER["Reviewer / Admin<br/>Guardian Web"]
+
+    subgraph IDE["IDE Plugin Runtime"]
+        UI["Commands + Webview UI"]
+        CTX["ContextCollector<br/>workspace, branch, active file, snippets"]
+        CLIENT["AIClient"]
+        GATE["RiskGate<br/>finalRisk = max(local, backend)"]
+        APPROVAL_CLIENT["ApprovalClient<br/>POST /approvals + SSE/polling"]
+        APPLY["ChangeApplier"]
+        ROLLBACK["SessionStore + Dead Man's Switch"]
+        LOCAL_FALLBACK["Local simulated approval fallback"]
     end
 
-    subgraph Plugin_Intelligence["IDE Plugin Intelligence"]
-        CONTEXT["Local Context Collector"]
-        RISK["Local Risk Evaluation"]
-        GUARD["Governance Guardrails"]
-        DMS["Dead Man's Switch Rollback"]
-        FALLBACK["Local Simulated Approval Fallback"]
+    subgraph WORKSPACE["Developer Workspace"]
+        REPO["Repo files + Git state"]
     end
 
-    subgraph Governance_Core["Guardian-Web Governance Core"]
-        API["Next.js API Routes"]
-        PLAN["Plan Generation (/generate-plan)"]
-        APPROVAL["Human-in-the-Loop Approval Workflow"]
-        EVENTS["Decision Events (Polling/SSE)"]
-        INCIDENT["Incident Mode Control"]
-        POLICY["Policy + Path Rules"]
-        AUDIT["Audit Views + Records"]
+    subgraph SERVICE["Guardian Web Service"]
+        DASH["Dashboard UI + React Query<br/>CR, policy, incident, audit views"]
+
+        subgraph ROUTES["Next.js Routes"]
+            PLUGIN_ROUTES["Plugin routes<br/>/generate-plan<br/>/approvals<br/>/approvals/:id/decision<br/>/approvals/:id/events"]
+            REVIEW_ROUTES["Dashboard APIs<br/>/api/cr, /api/policy<br/>/api/incident, /api/audit"]
+            AI_ROUTES["AI APIs<br/>/api/ai/plan<br/>/api/jobs/:id<br/>/api/openai/webhook"]
+        end
+
+        subgraph CORE["Planning + Governance Core"]
+            POLICY["Policy engine<br/>path rules + thresholds"]
+            EXEC["Plan execution / backendPlan"]
+            OPENAI_REL["OpenAI reliability layer<br/>structured JSON, retries, background polling"]
+            HEURISTIC["Heuristic planner fallback"]
+            APPROVAL_CORE["Approval + CR workflow"]
+            INCIDENT["Incident mode gate"]
+            AUDIT["Audit + compact backend view"]
+            STORE["dataStore adapter<br/>demo vs prod"]
+        end
     end
 
-    subgraph Data_Layer["Data and Persistence"]
-        STORE["Integration Store (CR/Policy/Audit)"]
-        MIRROR["SQLite Backend Mirror"]
+    subgraph INFRA["Infra + External Services"]
+        OPENAI["OpenAI Responses API"]
+        REDIS["Redis + BullMQ<br/>queue, retries, dead-letter queue"]
+        WORKER["planWorker"]
+        TELEMETRY["Request IDs + OTel spans"]
     end
 
-    USER --> WEB
-    USER --> PLUGIN
+    subgraph DATA["Persistence"]
+        DEMO["Demo mode<br/>JSON integration store"]
+        SQLITE["SQLite mirror<br/>compatibility + compact audit"]
+        POSTGRES["Prod mode<br/>Postgres via Prisma"]
+    end
 
-    PLUGIN --> CONTEXT --> RISK --> GUARD
-    GUARD -->|low-risk path| PLUGIN
-    GUARD -->|high-risk requires approval| API
-    GUARD -->|backend unreachable| FALLBACK --> PLUGIN
+    DEV --> UI
+    REPO --> CTX
+    UI --> CTX --> CLIENT
+    CLIENT -->|prompt + context| PLUGIN_ROUTES
+    PLUGIN_ROUTES --> EXEC
+    PLUGIN_ROUTES --> APPROVAL_CORE
+    EXEC --> POLICY
+    EXEC --> OPENAI_REL
+    EXEC --> HEURISTIC
+    OPENAI_REL --> OPENAI
+    OPENAI_REL -.fallback.-> HEURISTIC
+    EXEC --> STORE
+    EXEC --> TELEMETRY
+    PLUGIN_ROUTES -->|plan + backend risk| CLIENT
+    CLIENT --> GATE
+    GATE -->|low / medium| UI
+    GATE -->|high risk| APPROVAL_CLIENT
+    APPROVAL_CLIENT -->|create request / wait for decision| PLUGIN_ROUTES
+    APPROVAL_CLIENT -.backend unavailable.-> LOCAL_FALLBACK
+    LOCAL_FALLBACK --> UI
 
-    WEB --> API
-    PLUGIN -->|POST /generate-plan| API
-    PLUGIN <-->|POST /approvals + GET decision/events| API
+    UI -->|apply approved plan| APPLY
+    APPLY --> REPO
+    APPLY --> ROLLBACK
+    ROLLBACK --> REPO
 
-    API --> PLAN
-    API --> APPROVAL --> EVENTS
-    API --> INCIDENT
-    API --> POLICY
-    API --> AUDIT
+    REVIEWER --> DASH
+    DASH <--> REVIEW_ROUTES
+    REVIEW_ROUTES --> APPROVAL_CORE
+    REVIEW_ROUTES --> POLICY
+    REVIEW_ROUTES --> INCIDENT
+    REVIEW_ROUTES --> AUDIT
+    INCIDENT -.blocks reviewer approvals.-> APPROVAL_CORE
+    APPROVAL_CORE -->|decision event| PLUGIN_ROUTES
+    APPROVAL_CORE --> STORE
+    APPROVAL_CORE -.demo mirror.-> SQLITE
 
-    APPROVAL --> STORE
-    INCIDENT --> STORE
+    AI_ROUTES -->|small request| EXEC
+    AI_ROUTES -->|async or long-running request| REDIS
+    REDIS --> WORKER --> EXEC
+    AI_ROUTES -->|job status lookup| REDIS
+    OPENAI -.signed webhook.-> AI_ROUTES
+
     POLICY --> STORE
+    INCIDENT --> STORE
     AUDIT --> STORE
-    API --> MIRROR
+    STORE --> DEMO
+    STORE --> POSTGRES
+    STORE -.demo mirror.-> SQLITE
 
-    PLUGIN --> DMS
+    classDef actor fill:#e6f2ff,stroke:#1d5fa7,color:#111;
+    classDef plugin fill:#f6ecff,stroke:#7a3db8,color:#111;
+    classDef service fill:#ebf7ee,stroke:#2f7a43,color:#111;
+    classDef infra fill:#fff1df,stroke:#b86a1f,color:#111;
+    classDef data fill:#fff7d6,stroke:#9c7a00,color:#111;
 
-    classDef client fill:#e1f5fe,stroke:#01579b,color:#111;
-    classDef plugin fill:#f3e5f5,stroke:#6a1b9a,color:#111;
-    classDef gov fill:#e8f5e9,stroke:#2e7d32,color:#111;
-    classDef data fill:#fff3e0,stroke:#e65100,color:#111;
-
-    class USER,WEB,PLUGIN client
-    class CONTEXT,RISK,GUARD,DMS,FALLBACK plugin
-    class API,PLAN,APPROVAL,EVENTS,INCIDENT,POLICY,AUDIT gov
-    class STORE,MIRROR data
+    class DEV,REVIEWER actor
+    class UI,CTX,CLIENT,GATE,APPROVAL_CLIENT,APPLY,ROLLBACK,LOCAL_FALLBACK plugin
+    class DASH,PLUGIN_ROUTES,REVIEW_ROUTES,AI_ROUTES,POLICY,EXEC,OPENAI_REL,HEURISTIC,APPROVAL_CORE,INCIDENT,AUDIT,STORE service
+    class OPENAI,REDIS,WORKER,TELEMETRY infra
+    class DEMO,SQLITE,POSTGRES,REPO data
 ```
-
