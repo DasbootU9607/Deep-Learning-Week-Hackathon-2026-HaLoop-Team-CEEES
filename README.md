@@ -92,6 +92,10 @@ Final exported diagram used in this README: `.github/assets/haloop-architecture-
 <img src="./.github/assets/Plugin.png" width="450">  
 *In-IDE guidance showing real-time risk levels and pending approvals.*
 
+**AI Governance Chat**  
+<img src="./.github/assets/ai-governance-chat.png" width="450">  
+*AI assistive analysis that explains governance signals, risk rationale, and recommended next actions for the developer.*
+
 **Backend Processing Logs**  
 <img src="./.github/assets/console.png" width="450">  
 *Technical view of the risk evaluation engine and state transitions.*
