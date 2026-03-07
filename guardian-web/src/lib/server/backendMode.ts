@@ -1,4 +1,9 @@
 export type BackendMode = "demo" | "prod";
+export interface RuntimeModeSummary {
+  mode: BackendMode;
+  queueEnabled: boolean;
+  datastore: "demo-json" | "prisma-postgres";
+}
 
 let cachedMode: BackendMode | undefined;
 
@@ -14,6 +19,19 @@ export function getBackendMode(): BackendMode {
 
 export function isProdBackendMode(): boolean {
   return getBackendMode() === "prod";
+}
+
+export function isQueueConfiguredForRuntime(): boolean {
+  return isProdBackendMode() && Boolean(process.env.REDIS_URL?.trim());
+}
+
+export function getRuntimeModeSummary(): RuntimeModeSummary {
+  const mode = getBackendMode();
+  return {
+    mode,
+    queueEnabled: isQueueConfiguredForRuntime(),
+    datastore: mode === "prod" ? "prisma-postgres" : "demo-json",
+  };
 }
 
 export function resetBackendModeCacheForTests(): void {

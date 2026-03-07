@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { mirrorApprovalDecision } from "@/lib/server/backendMirror";
-import { applyReviewAction, isIncidentModeApprovalError } from "@/lib/server/dataStore";
+import { requirePermission, AuthError } from "@/lib/server/auth";
+import { applyReviewAction, getActivePolicy, isIncidentModeApprovalError } from "@/lib/server/dataStore";
 import { crReviewActionBodySchema } from "@/lib/server/contracts";
 
 export const runtime = "nodejs";
@@ -11,12 +12,13 @@ interface Params {
 
 export async function POST(request: Request, { params }: Params): Promise<NextResponse> {
   try {
+    const policy = await getActivePolicy();
+    const actor = requirePermission(request, policy, "reject");
     const body = crReviewActionBodySchema.parse(await readJson(request));
-    const reviewer = body.reviewer ?? "Web Reviewer";
     const updated = await applyReviewAction({
       crId: params.id,
       action: "changes_requested",
-      reviewer,
+      actor,
       comment: body.comment,
     });
 
@@ -28,7 +30,7 @@ export async function POST(request: Request, { params }: Params): Promise<NextRe
       await mirrorApprovalDecision({
         approvalId: params.id,
         decision: "changes_requested",
-        reviewer,
+        reviewer: actor.name,
         reason: body.comment,
       });
     } catch (mirrorError) {
@@ -37,6 +39,9 @@ export async function POST(request: Request, { params }: Params): Promise<NextRe
 
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: toErrorMessage(error) }, { status: error.status });
+    }
     if (isIncidentModeApprovalError(error)) {
       return NextResponse.json({ error: toErrorMessage(error) }, { status: 409 });
     }

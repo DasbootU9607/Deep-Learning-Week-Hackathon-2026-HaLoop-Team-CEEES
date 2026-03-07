@@ -35,7 +35,13 @@ export function PatchSummaryTable({ files }: PatchSummaryTableProps) {
       <CardContent className="p-0">
         <div className="divide-y divide-border">
           {files.map((file, idx) => (
-            <div key={idx} className="flex items-center gap-3 px-6 py-3 hover:bg-secondary/20 transition-colors">
+            <div
+              key={idx}
+              className={cn(
+                "flex items-center gap-3 px-6 py-3 transition-colors hover:bg-secondary/20",
+                file.is_protected && "bg-yellow-500/5"
+              )}
+            >
               <span
                 className={cn(
                   "shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium",
@@ -54,6 +60,20 @@ export function PatchSummaryTable({ files }: PatchSummaryTableProps) {
                   {file.risk_rules_hit.map((rule) => (
                     <span key={rule} className="rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 px-1.5 py-0.5 text-xs">
                       {rule}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {file.is_protected && (
+                <span className="rounded border border-yellow-500/30 bg-yellow-500/10 px-1.5 py-0.5 text-xs text-yellow-300">
+                  protected
+                </span>
+              )}
+              {file.risk_categories && file.risk_categories.length > 0 && (
+                <div className="hidden lg:flex gap-1 shrink-0">
+                  {Array.from(new Set(file.risk_categories)).map((category) => (
+                    <span key={category} className="rounded border border-border bg-secondary/40 px-1.5 py-0.5 text-xs text-muted-foreground">
+                      {category}
                     </span>
                   ))}
                 </div>

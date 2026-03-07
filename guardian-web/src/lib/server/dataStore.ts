@@ -9,6 +9,7 @@ import {
   GeneratePlanResponse,
   IncidentModeState,
 } from "@/lib/server/contracts";
+import { AuthenticatedActor } from "@/lib/server/auth";
 import * as demoStore from "@/lib/server/dataStoreDemo";
 import * as prodStore from "@/lib/server/dataStorePrisma";
 
@@ -33,7 +34,7 @@ type StoreModule = {
   applyReviewAction: (params: {
     crId: string;
     action: "approved" | "rejected" | "changes_requested";
-    reviewer?: string;
+    actor: AuthenticatedActor;
     comment?: string;
   }) => Promise<CR | undefined>;
   listAuditLogs: (filters?: AuditFilters) => Promise<AuditLog[]>;
@@ -41,12 +42,13 @@ type StoreModule = {
   getIncidentModeState: () => Promise<IncidentModeState>;
   setIncidentModeState: (params: {
     enabled: boolean;
-    by?: string;
+    actor: AuthenticatedActor;
     reason?: string;
   }) => Promise<IncidentModeState>;
   updatePathRules: (
     rules: PathRule[],
     riskThresholds?: Policy["risk_thresholds"],
+    actor?: AuthenticatedActor,
   ) => Promise<Policy>;
   isIncidentModeApprovalError: (error: unknown) => boolean;
 };
@@ -87,7 +89,7 @@ export async function getCRById(id: string): Promise<CR | undefined> {
 export async function applyReviewAction(params: {
   crId: string;
   action: "approved" | "rejected" | "changes_requested";
-  reviewer?: string;
+  actor: AuthenticatedActor;
   comment?: string;
 }): Promise<CR | undefined> {
   return getStore().applyReviewAction(params);
@@ -107,7 +109,7 @@ export async function getIncidentModeState(): Promise<IncidentModeState> {
 
 export async function setIncidentModeState(params: {
   enabled: boolean;
-  by?: string;
+  actor: AuthenticatedActor;
   reason?: string;
 }): Promise<IncidentModeState> {
   return getStore().setIncidentModeState(params);
@@ -116,8 +118,9 @@ export async function setIncidentModeState(params: {
 export async function updatePathRules(
   rules: PathRule[],
   riskThresholds?: Policy["risk_thresholds"],
+  actor?: AuthenticatedActor,
 ): Promise<Policy> {
-  return getStore().updatePathRules(rules, riskThresholds);
+  return getStore().updatePathRules(rules, riskThresholds, actor);
 }
 
 export function isIncidentModeApprovalError(error: unknown): boolean {

@@ -1,5 +1,5 @@
 import { Queue, QueueEvents, Worker, type JobsOptions, type Job } from "bullmq";
-import { isProdBackendMode } from "@/lib/server/backendMode";
+import { isQueueConfiguredForRuntime } from "@/lib/server/backendMode";
 import { executePlanGeneration, PlanExecutionInput, PlanExecutionOutput } from "@/lib/server/planExecution";
 
 const PLAN_QUEUE_NAME = "plan-generation";
@@ -10,7 +10,7 @@ let cachedDlq: Queue | undefined;
 let cachedQueueEvents: QueueEvents | undefined;
 
 export function isPlanQueueEnabled(): boolean {
-  return isProdBackendMode() && Boolean(process.env.REDIS_URL?.trim());
+  return isQueueConfiguredForRuntime();
 }
 
 export function getPlanQueue(): Queue {

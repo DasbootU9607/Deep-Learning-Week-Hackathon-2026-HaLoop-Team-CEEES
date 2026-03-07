@@ -1,11 +1,29 @@
 import { randomUUID } from "node:crypto";
-import { Policy } from "@/types/policy";
-import { FileChange, GeneratePlanRequest, GeneratePlanResponse } from "@/lib/server/contracts";
+import { Policy, PathRule } from "@/types/policy";
+import {
+  FileChange,
+  GeneratePlanRequest,
+  GeneratePlanResponse,
+  MatchedPolicyRule,
+  ReviewDecision,
+  RiskReason,
+} from "@/lib/server/contracts";
 
 type RiskLevel = "low" | "medium" | "high";
 
-const DESTRUCTIVE_COMMAND_PATTERN = /(rm\s+-rf|drop\s+database|truncate\b|git\s+reset\s+--hard|terraform\s+destroy)/i;
-const SECRET_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_-]?key|token|secret)\s*[:=]\s*["'][^"']+["']/i;
+const DESTRUCTIVE_COMMAND_PATTERN =
+  /(rm\s+-rf|drop\s+database|truncate\b|git\s+reset\s+--hard|terraform\s+destroy)/i;
+const SECRET_PATTERN =
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_-]?key|token|secret)\s*[:=]\s*["'][^"']+["']/i;
+const PROTECTED_PATH_PATTERNS = [
+  /(^|\/)auth(\/|$)/i,
+  /(^|\/)migrations(\/|$)/i,
+  /(^|\/)schema\.sql$/i,
+  /(^|\/)package\.json$/i,
+  /(^|\/)infra(\/|$)/i,
+];
+const SMALL_BLAST_RADIUS_MAX_FILES = 2;
+const SMALL_DIFF_SIZE_MAX_LINES = 120;
 
 export function generatePlanFromPrompt(
   request: GeneratePlanRequest,
@@ -14,8 +32,8 @@ export function generatePlanFromPrompt(
   const promptLower = request.prompt.toLowerCase();
   const changes = inferChanges(request);
   const proposedCommands = inferCommands(promptLower);
-
-  const { score, level, reasons } = scoreRisk({
+  const { backendRisk, review } = analyzePlan({
+    prompt: request.prompt,
     changes,
     proposedCommands,
     policy,
@@ -23,7 +41,8 @@ export function generatePlanFromPrompt(
 
   const summary = [
     `Proposed ${changes.length} change(s) for branch ${request.context.branch}.`,
-    `Backend risk is ${level.toUpperCase()} (${score}/100).`,
+    `Backend risk is ${backendRisk.level.toUpperCase()} (${backendRisk.score}/100).`,
+    summarizeReviewMode(review.mode),
   ].join(" ");
 
   return {
@@ -31,11 +50,256 @@ export function generatePlanFromPrompt(
     summary,
     changes,
     proposedCommands,
+    backendRisk,
+    review,
+  };
+}
+
+function analyzePlan(params: {
+  prompt: string;
+  changes: FileChange[];
+  proposedCommands: string[];
+  policy: Policy;
+}): {
+  backendRisk: GeneratePlanResponse["backendRisk"];
+  review: ReviewDecision;
+} {
+  const reasons: RiskReason[] = [];
+  const matchedPolicyRules = new Map<string, MatchedPolicyRule>();
+  const semanticMessages = new Set<string>();
+  let score = 12;
+
+  for (const command of params.proposedCommands) {
+    if (!DESTRUCTIVE_COMMAND_PATTERN.test(command)) {
+      continue;
+    }
+
+    score += 80;
+    reasons.push({
+      source: "backend",
+      category: "command",
+      message: `Destructive command detected: ${command}`,
+      weight: 80,
+    });
+  }
+
+  for (const change of params.changes) {
+    const normalizedPath = normalizePath(change.path);
+
+    for (const rule of params.policy.path_rules) {
+      if (!globMatch(normalizedPath, rule.pattern)) {
+        continue;
+      }
+
+      addMatchedPolicyRule(matchedPolicyRules, rule, normalizedPath);
+
+      if (rule.type === "deny") {
+        score += 90;
+        reasons.push({
+          source: "policy",
+          category: "path",
+          message: `Policy blocks edits to ${normalizedPath} via rule ${rule.pattern}.`,
+          affectedPath: normalizedPath,
+          weight: 90,
+        });
+      } else if (rule.type === "require_approval") {
+        score += 60;
+        reasons.push({
+          source: "policy",
+          category: "path",
+          message: `Protected path rule ${rule.pattern} requires approval for ${normalizedPath}.`,
+          affectedPath: normalizedPath,
+          weight: 60,
+        });
+      }
+    }
+
+    const semanticReason = toSemanticPathReason(normalizedPath, params.prompt);
+    if (semanticReason && !semanticMessages.has(semanticReason.message)) {
+      semanticMessages.add(semanticReason.message);
+      reasons.push(semanticReason);
+      score += semanticReason.weight;
+    }
+
+    if (change.newContent && SECRET_PATTERN.test(change.newContent)) {
+      score += 60;
+      reasons.push({
+        source: "backend",
+        category: "secret",
+        message: `Potential secret content detected in ${normalizedPath}.`,
+        affectedPath: normalizedPath,
+        weight: 60,
+      });
+    }
+  }
+
+  if (params.changes.length > SMALL_BLAST_RADIUS_MAX_FILES) {
+    const blastWeight = params.changes.length > 5 ? 30 : 18;
+    score += blastWeight;
+    reasons.push({
+      source: "backend",
+      category: "blast_radius",
+      message: `Blast radius includes ${params.changes.length} files, which is above the low-risk limit of ${SMALL_BLAST_RADIUS_MAX_FILES}.`,
+      weight: blastWeight,
+    });
+  }
+
+  const totalChangedLines = params.changes.reduce((sum, change) => {
+    if (!change.newContent) {
+      return sum;
+    }
+    return sum + countLines(change.newContent);
+  }, 0);
+
+  if (totalChangedLines > SMALL_DIFF_SIZE_MAX_LINES) {
+    const diffWeight = totalChangedLines > 250 ? 20 : 12;
+    score += diffWeight;
+    reasons.push({
+      source: "backend",
+      category: "diff_size",
+      message: `Diff size is ${totalChangedLines} lines, above the low-risk limit of ${SMALL_DIFF_SIZE_MAX_LINES}.`,
+      weight: diffWeight,
+    });
+  }
+
+  score = clamp(score, 0, 100);
+
+  const level =
+    score <= params.policy.risk_thresholds.low_max
+      ? "low"
+      : score <= params.policy.risk_thresholds.med_max
+        ? "medium"
+        : "high";
+
+  if (reasons.length === 0) {
+    reasons.push({
+      source: "backend",
+      category: "diff_size",
+      message: "No elevated risk signals detected.",
+      weight: 0,
+    });
+  }
+
+  const review = buildReviewDecision({
+    score,
+    level,
+    reasons,
+    changes: params.changes,
+    matchedPolicyRules: Array.from(matchedPolicyRules.values()),
+    policy: params.policy,
+    totalChangedLines,
+    proposedCommands: params.proposedCommands,
+  });
+
+  return {
     backendRisk: {
       score,
       level,
       reasons,
     },
+    review,
+  };
+}
+
+function buildReviewDecision(params: {
+  score: number;
+  level: RiskLevel;
+  reasons: RiskReason[];
+  changes: FileChange[];
+  matchedPolicyRules: MatchedPolicyRule[];
+  policy: Policy;
+  totalChangedLines: number;
+  proposedCommands: string[];
+}): ReviewDecision {
+  const hasDestructiveCommand = params.proposedCommands.some((command) =>
+    DESTRUCTIVE_COMMAND_PATTERN.test(command),
+  );
+  const hasProtectedPath = params.changes.some((change) =>
+    PROTECTED_PATH_PATTERNS.some((pattern) => pattern.test(normalizePath(change.path))),
+  );
+  const hasSecret = params.reasons.some((reason) => reason.category === "secret");
+  const hasDeniedRule = params.matchedPolicyRules.some((rule) => rule.type === "deny");
+  const hasRequireApprovalRule = params.matchedPolicyRules.some(
+    (rule) => rule.type === "require_approval",
+  );
+
+  const guardrailsPassed = {
+    destructiveCommands: !hasDestructiveCommand,
+    protectedPaths: !hasProtectedPath,
+    secrets: !hasSecret,
+    blastRadius: params.changes.length <= SMALL_BLAST_RADIUS_MAX_FILES,
+    diffSize: params.totalChangedLines <= SMALL_DIFF_SIZE_MAX_LINES,
+  };
+
+  const autoApproveBelow =
+    params.policy.risk_thresholds.auto_approve_below ?? params.policy.risk_thresholds.low_max;
+
+  if (hasDeniedRule) {
+    const deniedRule = params.matchedPolicyRules.find((rule) => rule.type === "deny");
+    return {
+      mode: "blocked",
+      rationale: [
+        `Policy rule ${deniedRule?.pattern ?? "unknown"} blocks this request outright.`,
+        deniedRule?.matchedPaths.length
+          ? `Blocked paths: ${deniedRule.matchedPaths.join(", ")}.`
+          : "A denied path rule was matched.",
+      ],
+      matchedPolicyRules: params.matchedPolicyRules,
+      guardrailsPassed,
+    };
+  }
+
+  const isStrictLowRisk =
+    params.score < autoApproveBelow &&
+    Object.values(guardrailsPassed).every(Boolean) &&
+    params.level === "low";
+
+  if (isStrictLowRisk) {
+    return {
+      mode: "auto_approved",
+      rationale: [
+        `Risk score is ${params.score}, below the auto-approve threshold of ${autoApproveBelow}.`,
+        `Only ${params.changes.length} file(s) and ${params.totalChangedLines} line(s) are affected.`,
+        "Auto-approved because no protected paths, destructive commands, or secret patterns were detected.",
+      ],
+      matchedPolicyRules: params.matchedPolicyRules,
+      guardrailsPassed,
+    };
+  }
+
+  const requiresApproval =
+    params.score > params.policy.risk_thresholds.med_max ||
+    hasRequireApprovalRule ||
+    !guardrailsPassed.destructiveCommands ||
+    !guardrailsPassed.protectedPaths ||
+    !guardrailsPassed.secrets;
+
+  if (requiresApproval) {
+    return {
+      mode: "approval_required",
+      rationale: [
+        `Approval required because risk score is ${params.score}.`,
+        ...toTopRationaleLines(params.reasons, 2),
+        params.matchedPolicyRules.length > 0
+          ? `Matched policy rules: ${params.matchedPolicyRules
+              .map((rule) => `${rule.pattern} (${rule.type})`)
+              .join(", ")}.`
+          : "No allowlisted low-risk exception applied.",
+      ],
+      matchedPolicyRules: params.matchedPolicyRules,
+      guardrailsPassed,
+    };
+  }
+
+  return {
+    mode: "warning",
+    rationale: [
+      `Manual approval is not required, but risk score is ${params.score} so review is recommended.`,
+      ...toTopRationaleLines(params.reasons, 2),
+      `The request affects ${params.changes.length} file(s) and ${params.totalChangedLines} line(s).`,
+    ],
+    matchedPolicyRules: params.matchedPolicyRules,
+    guardrailsPassed,
   };
 }
 
@@ -92,6 +356,21 @@ function inferChanges(request: GeneratePlanRequest): FileChange[] {
     });
   }
 
+  if (/(refactor|multi-file|workflow|cross-module)/.test(prompt)) {
+    const supportPaths = [
+      "src/ai/generated-helper.ts",
+      "src/ai/generated-workflow.ts",
+    ];
+
+    for (const supportPath of supportPaths) {
+      changes.push({
+        path: supportPath,
+        action: "create",
+        newContent: buildExpandedDraft(request.prompt, supportPath),
+      });
+    }
+  }
+
   return changes;
 }
 
@@ -106,6 +385,10 @@ function inferPathFromPrompt(prompt: string): string | undefined {
 
   if (/package\.json|dependency|dependencies|npm/.test(prompt)) {
     return "package.json";
+  }
+
+  if (/(infra|terraform|k8s|helm)/.test(prompt) && /\b(prod|production)\b/.test(prompt)) {
+    return "infra/prod/deployment.yaml";
   }
 
   if (/(infra|terraform|k8s|helm)/.test(prompt)) {
@@ -126,6 +409,10 @@ function inferCommands(promptLower: string): string[] {
     commands.push("npm test");
   }
 
+  if (/lint|format|style/.test(promptLower)) {
+    commands.push("npm run lint");
+  }
+
   if (/migrat|schema|database|db/.test(promptLower)) {
     commands.push("npm run migrate");
   }
@@ -137,75 +424,105 @@ function inferCommands(promptLower: string): string[] {
   return commands;
 }
 
-function scoreRisk(params: {
-  changes: FileChange[];
-  proposedCommands: string[];
-  policy: Policy;
-}): { score: number; level: RiskLevel; reasons: string[] } {
-  const reasons: string[] = [];
-  let score = 15;
+function buildExpandedDraft(prompt: string, filePath: string): string {
+  const lines = Array.from({ length: 48 }, (_, index) => {
+    return `export const generatedLine${index + 1} = "${filePath}:${index + 1}:${prompt.slice(0, 24)}";`;
+  });
 
-  for (const command of params.proposedCommands) {
-    if (DESTRUCTIVE_COMMAND_PATTERN.test(command)) {
-      score += 80;
-      reasons.push(`Destructive command detected: ${command}`);
+  return [
+    "// AI-generated expanded draft for multi-file review.",
+    ...lines,
+  ].join("\n");
+}
+
+function addMatchedPolicyRule(
+  matchedPolicyRules: Map<string, MatchedPolicyRule>,
+  rule: PathRule,
+  matchedPath: string,
+): void {
+  const existing = matchedPolicyRules.get(rule.id);
+  if (existing) {
+    if (!existing.matchedPaths.includes(matchedPath)) {
+      existing.matchedPaths.push(matchedPath);
     }
+    return;
   }
 
-  for (const change of params.changes) {
-    for (const rule of params.policy.path_rules) {
-      if (!globMatch(change.path, rule.pattern)) {
-        continue;
-      }
+  matchedPolicyRules.set(rule.id, {
+    id: rule.id,
+    pattern: rule.pattern,
+    type: rule.type,
+    description: rule.description,
+    matchedPaths: [matchedPath],
+  });
+}
 
-      if (rule.type === "deny") {
-        score += 90;
-        reasons.push(`Denied by policy rule ${rule.pattern}`);
-      } else if (rule.type === "require_approval") {
-        score += 60;
-        reasons.push(`Approval required by policy rule ${rule.pattern}`);
-      } else {
-        reasons.push(`Allowed by policy rule ${rule.pattern}`);
-      }
-    }
-
-    if (change.newContent && SECRET_PATTERN.test(change.newContent)) {
-      score += 20;
-      reasons.push(`Potential secret content detected in ${change.path}`);
-    }
+function toSemanticPathReason(path: string, prompt: string): RiskReason | undefined {
+  if (/(^|\/)auth(\/|$)|login|permission|jwt/i.test(path) || /auth|login|permission|jwt/i.test(prompt)) {
+    return {
+      source: "backend",
+      category: "path",
+      message:
+        "This request modifies authentication code, so it is treated as identity/security-sensitive.",
+      affectedPath: path,
+      weight: 24,
+    };
   }
 
-  if (params.changes.length > 5) {
-    score += 30;
-    reasons.push("Large blast radius: more than 5 files changed");
+  if (/(^|\/)migrations(\/|$)|schema\.sql$/i.test(path) || /migrat|schema|database|db/i.test(prompt)) {
+    return {
+      source: "backend",
+      category: "path",
+      message:
+        "This request changes database structure, so rollback complexity and data integrity risk are higher.",
+      affectedPath: path,
+      weight: 22,
+    };
   }
 
-  const totalChangedLines = params.changes.reduce((sum, change) => {
-    if (!change.newContent) {
-      return sum;
-    }
-    return sum + countLines(change.newContent);
-  }, 0);
-
-  if (totalChangedLines > 250) {
-    score += 20;
-    reasons.push("Large diff size: more than 250 lines");
+  if (/(^|\/)package\.json$/i.test(path) || /package\.json|dependency|dependencies|npm/i.test(prompt)) {
+    return {
+      source: "backend",
+      category: "path",
+      message:
+        "This request changes dependencies, which can affect supply-chain trust and runtime behavior.",
+      affectedPath: path,
+      weight: 18,
+    };
   }
 
-  score = clamp(score, 0, 100);
-
-  const level =
-    score <= params.policy.risk_thresholds.low_max
-      ? "low"
-      : score <= params.policy.risk_thresholds.med_max
-      ? "medium"
-      : "high";
-
-  if (reasons.length === 0) {
-    reasons.push("No elevated risk signals detected.");
+  if (/(^|\/)infra(\/|$)/i.test(path) || /infra|terraform|k8s|helm/i.test(prompt)) {
+    return {
+      source: "backend",
+      category: "path",
+      message:
+        "This request modifies infrastructure or deployment configuration, so service blast radius is elevated.",
+      affectedPath: path,
+      weight: 18,
+    };
   }
 
-  return { score, level, reasons };
+  return undefined;
+}
+
+function toTopRationaleLines(reasons: RiskReason[], maxItems: number): string[] {
+  return reasons
+    .filter((reason) => reason.weight > 0)
+    .slice(0, maxItems)
+    .map((reason) => reason.message);
+}
+
+function summarizeReviewMode(mode: ReviewDecision["mode"]): string {
+  switch (mode) {
+    case "auto_approved":
+      return "Review mode: auto-approved.";
+    case "warning":
+      return "Review mode: warning.";
+    case "approval_required":
+      return "Review mode: approval required.";
+    case "blocked":
+      return "Review mode: blocked by policy.";
+  }
 }
 
 function globMatch(input: string, pattern: string): boolean {
@@ -224,6 +541,10 @@ function countLines(text: string): number {
     return 0;
   }
   return text.split("\n").length;
+}
+
+function normalizePath(filePath: string): string {
+  return filePath.replace(/\\/g, "/");
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -77,8 +77,64 @@ function buildMockPlan(request: GeneratePlanRequest): GeneratePlanResponse {
     backendRisk: {
       score: highRisk ? 82 : 18,
       level: highRisk ? "high" : "low",
-      reasons: highRisk ? ["Protected path touched in mock mode."] : ["Simple generated markdown file."]
-    }
+      reasons: highRisk
+        ? [
+            {
+              source: "policy",
+              category: "path",
+              message: "Protected path touched in mock mode.",
+              affectedPath: highRiskPath,
+              weight: 60,
+            },
+          ]
+        : [
+            {
+              source: "backend",
+              category: "diff_size",
+              message: "Simple generated markdown file.",
+              affectedPath: "ai-generated/quick-note.md",
+              weight: 0,
+            },
+          ],
+    },
+    review: highRisk
+      ? {
+          mode: "approval_required",
+          rationale: [
+            "Approval required because the mock plan touches a protected path.",
+            "Mock mode marked this request as high risk.",
+          ],
+          matchedPolicyRules: [
+            {
+              id: "mock-protected-path",
+              pattern: highRiskPath,
+              type: "require_approval",
+              matchedPaths: [highRiskPath],
+            },
+          ],
+          guardrailsPassed: {
+            destructiveCommands: !destructive,
+            protectedPaths: false,
+            secrets: true,
+            blastRadius: true,
+            diffSize: true,
+          },
+        }
+      : {
+          mode: "auto_approved",
+          rationale: [
+            "Risk score is 18, below the mock auto-approve threshold.",
+            "No protected paths or destructive commands were detected.",
+          ],
+          matchedPolicyRules: [],
+          guardrailsPassed: {
+            destructiveCommands: true,
+            protectedPaths: true,
+            secrets: true,
+            blastRadius: true,
+            diffSize: true,
+          },
+        },
   };
 }
 

@@ -60,23 +60,26 @@ export async function executePlanGeneration(input: PlanExecutionInput): Promise<
           goal: input.goal,
           planPayload: result.compactPlan,
           riskScore: result.response.backendRisk.score,
-          riskReasons: result.response.backendRisk.reasons,
+          riskReasons: result.response.backendRisk.reasons.map((reason) => reason.message),
           requestedBy: input.requestedBy,
           branchName: result.request.context.branch,
         })) ?? result.response.planId;
 
       let approvalId: string | undefined;
-      const approvalRequired = result.response.backendRisk.score >= 70;
+      const approvalRequired = result.response.review.mode === "approval_required";
       if (approvalRequired) {
         const approval = approvalRequestSchema.parse({
           approvalId: persistedId,
           planId: result.response.planId,
           sessionId: result.request.sessionId,
           requestedBy: input.requestedBy?.trim() || "api-user",
+          requestedByRole: "developer",
           risk: {
             score: result.response.backendRisk.score,
+            backendScore: result.response.backendRisk.score,
             level: "high",
             reasons: result.response.backendRisk.reasons,
+            review: result.response.review,
           },
           blastRadius: {
             files: result.response.changes.map((change) => change.path),

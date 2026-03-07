@@ -104,7 +104,9 @@ export default function CRDetailPage({ params }: CRDetailPageProps) {
             score={cr.risk_score}
             level={cr.risk_level}
             requiredApprovals={cr.required_approvals}
-            approvalsCount={cr.approvals.length}
+            approvalsCount={cr.approvals.filter((approval) => approval.action === "approved").length}
+            review={cr.review}
+            riskBreakdown={cr.risk_breakdown}
           />
           <ApprovalPanel cr={cr} />
         </div>
@@ -119,7 +121,7 @@ export default function CRDetailPage({ params }: CRDetailPageProps) {
           </TabsList>
 
           <TabsContent value="plan" className="mt-4">
-            <PlanViewer plan={cr.plan} />
+            <PlanViewer plan={cr.plan} review={cr.review} commands={cr.proposed_commands} riskReasons={cr.risk_reasons} />
           </TabsContent>
 
           <TabsContent value="patch" className="mt-4">

@@ -8,7 +8,7 @@ const RETRYABLE_STATUS = new Set([408, 409, 429, 500, 502, 503, 504]);
 const PLAN_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["planId", "summary", "changes", "proposedCommands", "backendRisk"],
+  required: ["planId", "summary", "changes", "proposedCommands", "backendRisk", "review"],
   properties: {
     planId: { type: "string", minLength: 1 },
     summary: { type: "string", minLength: 1 },
@@ -39,7 +39,72 @@ const PLAN_SCHEMA = {
         level: { type: "string", enum: ["low", "medium", "high"] },
         reasons: {
           type: "array",
-          items: { type: "string" },
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["source", "category", "message", "weight"],
+            properties: {
+              source: { type: "string", enum: ["backend", "plugin", "policy"] },
+              category: {
+                type: "string",
+                enum: ["path", "command", "secret", "blast_radius", "diff_size"],
+              },
+              message: { type: "string", minLength: 1 },
+              affectedPath: { type: "string" },
+              weight: { type: "integer", minimum: 0, maximum: 100 },
+            },
+          },
+        },
+      },
+    },
+    review: {
+      type: "object",
+      additionalProperties: false,
+      required: ["mode", "rationale", "matchedPolicyRules", "guardrailsPassed"],
+      properties: {
+        mode: {
+          type: "string",
+          enum: ["auto_approved", "warning", "approval_required", "blocked"],
+        },
+        rationale: {
+          type: "array",
+          items: { type: "string", minLength: 1 },
+        },
+        matchedPolicyRules: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "pattern", "type", "matchedPaths"],
+            properties: {
+              id: { type: "string", minLength: 1 },
+              pattern: { type: "string", minLength: 1 },
+              type: { type: "string", enum: ["allow", "deny", "require_approval"] },
+              description: { type: "string" },
+              matchedPaths: {
+                type: "array",
+                items: { type: "string" },
+              },
+            },
+          },
+        },
+        guardrailsPassed: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "destructiveCommands",
+            "protectedPaths",
+            "secrets",
+            "blastRadius",
+            "diffSize",
+          ],
+          properties: {
+            destructiveCommands: { type: "boolean" },
+            protectedPaths: { type: "boolean" },
+            secrets: { type: "boolean" },
+            blastRadius: { type: "boolean" },
+            diffSize: { type: "boolean" },
+          },
         },
       },
     },
@@ -239,8 +304,10 @@ function buildSystemPrompt(policy: Policy): string {
     "You are a backend planning engine for safe AI code changes.",
     "Return ONLY JSON that matches the provided schema.",
     "Use policy path rules and thresholds to score risk.",
+    "Each backendRisk.reasons entry must be structured with source, category, message, and weight.",
+    "Each review response must explain whether the plan is auto_approved, warning, approval_required, or blocked.",
     `Policy JSON: ${JSON.stringify(policy)}`,
-    "Set backendRisk.reasons with concise, actionable statements.",
+    "Set backendRisk.reasons with concise, actionable statements and set review.rationale with short human-readable explanations.",
   ].join("\n");
 }
 

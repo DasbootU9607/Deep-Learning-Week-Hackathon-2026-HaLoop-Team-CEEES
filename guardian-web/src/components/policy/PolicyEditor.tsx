@@ -10,6 +10,7 @@ import { ThresholdSlider } from "./ThresholdSlider";
 import { Badge } from "@/components/ui/badge";
 import { Save, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
+import { useDemoActor } from "@/lib/demoActorClient";
 
 interface PolicyEditorProps {
   policy: Policy;
@@ -20,6 +21,9 @@ export function PolicyEditor({ policy, onSaveRules }: PolicyEditorProps) {
   const [rules, setRules] = useState<PathRule[]>(policy.path_rules);
   const [thresholds, setThresholds] = useState<RiskThreshold>(policy.risk_thresholds);
   const [isDirty, setIsDirty] = useState(false);
+  const { actor } = useDemoActor();
+  const canConfigurePolicy =
+    policy.role_permissions.find((permission) => permission.role === actor.role)?.can_configure_policy ?? false;
 
   const handleRulesChange = (newRules: PathRule[]) => {
     setRules(newRules);
@@ -32,6 +36,10 @@ export function PolicyEditor({ policy, onSaveRules }: PolicyEditorProps) {
   };
 
   const handleSave = () => {
+    if (!canConfigurePolicy) {
+      toast.error(`Role ${actor.role} cannot edit policy.`);
+      return;
+    }
     onSaveRules({ rules, riskThresholds: thresholds });
     setIsDirty(false);
     toast.success("Policy saved successfully");
@@ -44,12 +52,19 @@ export function PolicyEditor({ policy, onSaveRules }: PolicyEditorProps) {
           <h2 className="text-sm font-medium">{policy.name}</h2>
           <Badge variant="secondary">v{policy.version}</Badge>
           {policy.is_active && <Badge className="bg-green-600 text-white">Active</Badge>}
+          <Badge variant="outline">Actor: {actor.role}</Badge>
         </div>
-        <Button size="sm" disabled={!isDirty} onClick={handleSave}>
+        <Button size="sm" disabled={!isDirty || !canConfigurePolicy} onClick={handleSave}>
           <Save className="h-4 w-4 mr-1" />
-          Save Changes
+          {canConfigurePolicy ? "Save Changes" : "Policy Locked"}
         </Button>
       </div>
+
+      {!canConfigurePolicy && (
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
+          Current actor is <strong>{actor.name}</strong> ({actor.role}). This role cannot edit policy.
+        </div>
+      )}
 
       <Tabs defaultValue="rules">
         <TabsList>

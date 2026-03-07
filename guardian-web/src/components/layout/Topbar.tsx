@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
+import { ActorSwitcher } from "./ActorSwitcher";
 
 interface TopbarProps {
   title: string;
@@ -26,6 +27,7 @@ export function Topbar({ title, description, children }: TopbarProps) {
         </div>
         <div className="flex items-center gap-2">
           {children}
+          <ActorSwitcher />
           <ThemeToggle />
           <Button variant="ghost" size="icon" className="relative rounded-xl border border-border bg-card hover:bg-accent">
             <Bell className="h-4 w-4" />

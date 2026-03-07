@@ -67,6 +67,11 @@ export function EvidencePanel({ evidence }: EvidencePanelProps) {
                   <span className="ml-2 text-xs text-muted-foreground rounded bg-secondary px-1.5 py-0.5">
                     {TYPE_LABEL[item.type]}
                   </span>
+                  {item.kind && (
+                    <span className="ml-2 text-xs text-muted-foreground rounded border border-border px-1.5 py-0.5">
+                      {item.kind === "executed" ? "Executed check" : "Recommended check"}
+                    </span>
+                  )}
                 </div>
               </div>
               {item.url && (
@@ -77,6 +82,13 @@ export function EvidencePanel({ evidence }: EvidencePanelProps) {
             </div>
             {item.summary && (
               <p className="mt-1.5 text-xs text-muted-foreground ml-6">{item.summary}</p>
+            )}
+            {(item.command || item.scope) && (
+              <p className="mt-1 text-xs text-foreground/80 ml-6">
+                {item.command ? <code className="font-mono">{item.command}</code> : null}
+                {item.command && item.scope ? " in " : null}
+                {item.scope ? <span className="font-mono">{item.scope}</span> : null}
+              </p>
             )}
             {item.details && (
               <p className="mt-1 text-xs text-foreground/80 ml-6 font-mono bg-secondary/50 rounded p-2">{item.details}</p>

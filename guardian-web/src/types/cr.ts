@@ -1,3 +1,5 @@
+import type { ReviewDecision, RiskReason } from "@/lib/server/contracts";
+
 export type CRStatus =
   | "draft"
   | "pending_approval"
@@ -14,6 +16,8 @@ export interface PatchFile {
   deletions: number;
   risk_rules_hit: string[];
   risk_level: RiskLevel;
+  is_protected?: boolean;
+  risk_categories?: Array<RiskReason["category"]>;
 }
 
 export interface BlastRadiusNode {
@@ -39,7 +43,10 @@ export interface BlastRadius {
 export interface EvidenceItem {
   type: "test" | "log" | "sast" | "sca" | "lint";
   status: "passed" | "failed" | "warning" | "skipped";
+  kind?: "recommended" | "executed";
   name: string;
+  command?: string;
+  scope?: string;
   url?: string;
   summary?: string;
   details?: string;
@@ -68,7 +75,15 @@ export interface CR {
   status: CRStatus;
   risk_score: number;
   risk_level: RiskLevel;
+  review?: ReviewDecision;
+  risk_reasons?: RiskReason[];
+  risk_breakdown?: {
+    local_score?: number;
+    backend_score: number;
+    final_score: number;
+  };
   plan?: string;
+  proposed_commands?: string[];
   patch_summary: PatchFile[];
   blast_radius: BlastRadius;
   evidence: EvidenceItem[];

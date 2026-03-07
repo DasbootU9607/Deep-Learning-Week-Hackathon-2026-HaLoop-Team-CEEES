@@ -15,6 +15,51 @@ export const mockCRs: CR[] = [
     status: "pending_approval",
     risk_score: 82,
     risk_level: "high",
+    risk_breakdown: {
+      local_score: 76,
+      backend_score: 82,
+      final_score: 82,
+    },
+    review: {
+      mode: "approval_required",
+      rationale: [
+        "Approval required because risk score is 82.",
+        "Protected dependency and payments paths are being modified.",
+        "This request affects revenue-sensitive payment flows.",
+      ],
+      matchedPolicyRules: [
+        {
+          id: "rule-package-approval",
+          pattern: "package.json",
+          type: "require_approval",
+          matchedPaths: ["package.json"],
+        },
+      ],
+      guardrailsPassed: {
+        destructiveCommands: true,
+        protectedPaths: false,
+        secrets: true,
+        blastRadius: false,
+        diffSize: false,
+      },
+    },
+    risk_reasons: [
+      {
+        source: "policy",
+        category: "path",
+        message: "Protected dependency file requires approval.",
+        affectedPath: "package.json",
+        weight: 60,
+      },
+      {
+        source: "backend",
+        category: "path",
+        message: "Payment flow changes are treated as revenue-sensitive.",
+        affectedPath: "src/payments/stripe.ts",
+        weight: 24,
+      },
+    ],
+    proposed_commands: ["npm run lint", "npm test"],
     required_approvals: 2,
     pr_url: "https://github.com/org/payments-service/pull/142",
     commit_sha: "a1b2c3d4e5f6",
@@ -77,8 +122,8 @@ export const mockCRs: CR[] = [
       ],
     },
     evidence: [
-      { type: "test", status: "passed", name: "Unit Tests", summary: "247/247 tests passing" },
-      { type: "test", status: "passed", name: "Integration Tests", summary: "43/43 tests passing" },
+      { type: "test", status: "passed", kind: "executed", name: "Unit Tests", command: "npm test", scope: "payments-service", summary: "247/247 tests passing" },
+      { type: "test", status: "passed", kind: "executed", name: "Integration Tests", command: "npm test", scope: "payments-service", summary: "43/43 tests passing" },
       {
         type: "sast",
         status: "warning",
@@ -113,6 +158,36 @@ export const mockCRs: CR[] = [
     status: "approved",
     risk_score: 28,
     risk_level: "low",
+    risk_breakdown: {
+      local_score: 22,
+      backend_score: 28,
+      final_score: 28,
+    },
+    review: {
+      mode: "auto_approved",
+      rationale: [
+        "Risk score is 28, below the auto-approve threshold.",
+        "Only two low-blast-radius files were changed.",
+        "No destructive commands or secrets were detected.",
+      ],
+      matchedPolicyRules: [],
+      guardrailsPassed: {
+        destructiveCommands: true,
+        protectedPaths: true,
+        secrets: true,
+        blastRadius: true,
+        diffSize: true,
+      },
+    },
+    risk_reasons: [
+      {
+        source: "backend",
+        category: "diff_size",
+        message: "Small two-file bug fix with contained blast radius.",
+        weight: 8,
+      },
+    ],
+    proposed_commands: ["npm test"],
     required_approvals: 1,
     pr_url: "https://github.com/org/user-service/pull/89",
     commit_sha: "b2c3d4e5f6a7",
@@ -146,7 +221,7 @@ export const mockCRs: CR[] = [
       ],
     },
     evidence: [
-      { type: "test", status: "passed", name: "Unit Tests", summary: "89/89 tests passing" },
+      { type: "test", status: "passed", kind: "executed", name: "Unit Tests", command: "npm test", scope: "user-service", summary: "89/89 tests passing" },
       { type: "sast", status: "passed", name: "CodeQL", summary: "No findings" },
       { type: "sca", status: "passed", name: "Snyk SCA", summary: "No vulnerabilities" },
     ],

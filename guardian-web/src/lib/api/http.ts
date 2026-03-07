@@ -1,8 +1,12 @@
+import { getStoredDemoActorToken } from "@/lib/demoActorClient";
+
 export async function apiRequest<T>(input: string, init?: RequestInit): Promise<T> {
+  const authToken = typeof window === "undefined" ? "" : getStoredDemoActorToken();
   const response = await fetch(input, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(init?.headers ?? {}),
     },
     cache: "no-store",

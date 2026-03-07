@@ -60,7 +60,7 @@ export async function mirrorPluginApprovalRequest(params: {
     riskScore,
     riskLevel: toRiskLevel(riskScore),
     status: "pending_approval",
-    policyHits: params.request.risk.reasons,
+    policyHits: params.request.risk.reasons.map((reason) => reason.message),
     reviewerIds: [],
     createdAt: params.request.createdAt,
   });
@@ -72,7 +72,7 @@ export async function mirrorPluginApprovalRequest(params: {
     eventPayload: {
       source: "plugin",
       risk_score: riskScore,
-      reasons: params.request.risk.reasons,
+      reasons: params.request.risk.reasons.map((reason) => reason.message),
     },
   });
 }

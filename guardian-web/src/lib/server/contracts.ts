@@ -7,6 +7,47 @@ export const fileChangeSchema = z.object({
   oldContentHash: z.string().optional(),
 });
 
+export const riskReasonSchema = z.object({
+  source: z.enum(["backend", "plugin", "policy"]),
+  category: z.enum(["path", "command", "secret", "blast_radius", "diff_size"]),
+  message: z.string().min(1),
+  affectedPath: z.string().min(1).optional(),
+  weight: z.number().int().min(0).max(100),
+});
+
+export const matchedPolicyRuleSchema = z.object({
+  id: z.string().min(1),
+  pattern: z.string().min(1),
+  type: z.enum(["allow", "deny", "require_approval"]),
+  description: z.string().optional(),
+  matchedPaths: z.array(z.string()),
+});
+
+export const reviewDecisionSchema = z.object({
+  mode: z.enum(["auto_approved", "warning", "approval_required", "blocked"]),
+  rationale: z.array(z.string().min(1)).min(1),
+  matchedPolicyRules: z.array(matchedPolicyRuleSchema),
+  guardrailsPassed: z.object({
+    destructiveCommands: z.boolean(),
+    protectedPaths: z.boolean(),
+    secrets: z.boolean(),
+    blastRadius: z.boolean(),
+    diffSize: z.boolean(),
+  }),
+});
+
+export const verificationEvidenceSchema = z.object({
+  type: z.enum(["test", "lint"]),
+  status: z.enum(["passed", "failed", "warning", "skipped"]),
+  kind: z.enum(["executed", "recommended"]),
+  name: z.string().min(1),
+  command: z.string().min(1),
+  scope: z.string().min(1).optional(),
+  url: z.string().url().optional(),
+  summary: z.string().min(1),
+  details: z.string().optional(),
+});
+
 export const contextSnippetSchema = z.object({
   path: z.string().min(1),
   content: z.string(),
@@ -16,6 +57,7 @@ export const contextSnippetSchema = z.object({
 
 export const generatePlanRequestSchema = z.object({
   sessionId: z.string().min(1),
+  requestedBy: z.string().trim().min(1).optional(),
   prompt: z.string().min(1),
   context: z.object({
     workspaceRoot: z.string().min(1),
@@ -35,8 +77,9 @@ export const generatePlanResponseSchema = z.object({
   backendRisk: z.object({
     score: z.number().min(0).max(100),
     level: z.enum(["low", "medium", "high"]),
-    reasons: z.array(z.string()),
+    reasons: z.array(riskReasonSchema),
   }),
+  review: reviewDecisionSchema,
 });
 
 export const approvalRequestSchema = z.object({
@@ -44,15 +87,20 @@ export const approvalRequestSchema = z.object({
   planId: z.string().min(1),
   sessionId: z.string().min(1),
   requestedBy: z.string().min(1),
+  requestedByRole: z.enum(["admin", "lead", "developer", "viewer"]).optional(),
   risk: z.object({
     score: z.number().min(70).max(100),
+    localScore: z.number().min(0).max(100).optional(),
+    backendScore: z.number().min(0).max(100),
     level: z.literal("high"),
-    reasons: z.array(z.string()),
+    reasons: z.array(riskReasonSchema),
+    review: reviewDecisionSchema,
   }),
   blastRadius: z.object({
     files: z.array(z.string()),
     commandCount: z.number().int().min(0),
   }),
+  verificationEvidence: z.array(verificationEvidenceSchema).optional(),
   createdAt: z.string().min(1),
 });
 
@@ -104,6 +152,10 @@ export const setIncidentModeBodySchema = z.object({
 });
 
 export type FileChange = z.infer<typeof fileChangeSchema>;
+export type RiskReason = z.infer<typeof riskReasonSchema>;
+export type MatchedPolicyRule = z.infer<typeof matchedPolicyRuleSchema>;
+export type ReviewDecision = z.infer<typeof reviewDecisionSchema>;
+export type VerificationEvidence = z.infer<typeof verificationEvidenceSchema>;
 export type GeneratePlanRequest = z.infer<typeof generatePlanRequestSchema>;
 export type GeneratePlanResponse = z.infer<typeof generatePlanResponseSchema>;
 export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;

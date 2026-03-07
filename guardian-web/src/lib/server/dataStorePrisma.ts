@@ -13,6 +13,7 @@ import {
   GeneratePlanRequest,
   GeneratePlanResponse,
 } from "@/lib/server/contracts";
+import { AuthenticatedActor } from "@/lib/server/auth";
 import { getPrismaClient } from "@/lib/server/prismaClient";
 
 export type StoredPlanSnapshot = {
@@ -130,18 +131,22 @@ export async function saveGeneratedPlan(params: {
 }): Promise<void> {
   await ensureBootstrapped();
   const prisma = getPrismaClient();
-  await prisma.storedPlan.upsert({
-    where: { planId: params.response.planId },
-    create: {
-      planId: params.response.planId,
-      requestJson: toJson(params.request),
-      responseJson: toJson(params.response),
-      createdAt: new Date(),
-    },
-    update: {
-      requestJson: toJson(params.request),
-      responseJson: toJson(params.response),
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.storedPlan.upsert({
+      where: { planId: params.response.planId },
+      create: {
+        planId: params.response.planId,
+        requestJson: toJson(params.request),
+        responseJson: toJson(params.response),
+        createdAt: new Date(),
+      },
+      update: {
+        requestJson: toJson(params.request),
+        responseJson: toJson(params.response),
+      },
+    });
+
+    await appendPlanAuditEventsTx(tx, params.request, params.response);
   });
 }
 
@@ -198,7 +203,11 @@ export async function createApprovalTicket(request: ApprovalRequest): Promise<Ap
         } satisfies StoredPlanSnapshot)
       : undefined;
 
-    const cr = toCRFromApproval(request, plan);
+    const policyRow = await tx.policyState.findUnique({
+      where: { id: DEFAULT_POLICY.id },
+    });
+    const policy = policyRow ? fromPolicyRow(policyRow) : DEFAULT_POLICY;
+    const cr = toCRFromApproval(request, plan, policy);
 
     await tx.changeRequest.create({
       data: toChangeRequestCreateData(cr),
@@ -216,6 +225,7 @@ export async function createApprovalTicket(request: ApprovalRequest): Promise<Ap
     await appendAuditTx(tx, {
       actor_id: request.requestedBy,
       actor_name: request.requestedBy,
+      actor_role: request.requestedByRole ?? "developer",
       action: "cr_submitted",
       target_cr_id: cr.id,
       target_cr_title: cr.title,
@@ -223,6 +233,7 @@ export async function createApprovalTicket(request: ApprovalRequest): Promise<Ap
       details: {
         source: "ide-plugin",
         approval_id: request.approvalId,
+        required_approvals: cr.required_approvals,
       },
     });
 
@@ -290,13 +301,14 @@ export async function getCRById(id: string): Promise<CR | undefined> {
     return undefined;
   }
 
-  return fromChangeRequestRow(row);
+  const cr = fromChangeRequestRow(row);
+  return enrichCRFromStoredPlan(prisma, cr);
 }
 
 export async function applyReviewAction(params: {
   crId: string;
   action: "approved" | "rejected" | "changes_requested";
-  reviewer?: string;
+  actor: AuthenticatedActor;
   comment?: string;
 }): Promise<CR | undefined> {
   await ensureBootstrapped();
@@ -320,11 +332,19 @@ export async function applyReviewAction(params: {
 
     const cr = fromChangeRequestRow(row);
     const now = new Date().toISOString();
-    const reviewer = params.reviewer ?? "Web Reviewer";
+    const reviewer = params.actor.name;
+    const reviewerId = params.actor.id;
+
+    if (
+      params.action === "approved" &&
+      cr.approvals.some((approval) => approval.action === "approved" && approval.reviewer_id === reviewerId)
+    ) {
+      throw new Error("A reviewer cannot approve the same CR twice.");
+    }
 
     cr.approvals.push({
       id: randomUUID(),
-      reviewer_id: reviewer.toLowerCase().replace(/\s+/g, "-"),
+      reviewer_id: reviewerId,
       reviewer_name: reviewer,
       action: params.action,
       comment: params.comment,
@@ -383,8 +403,9 @@ export async function applyReviewAction(params: {
     }
 
     await appendAuditTx(tx, {
-      actor_id: reviewer.toLowerCase().replace(/\s+/g, "-"),
+      actor_id: reviewerId,
       actor_name: reviewer,
+      actor_role: params.actor.role,
       action:
         params.action === "approved"
           ? "cr_approved"
@@ -397,7 +418,7 @@ export async function applyReviewAction(params: {
       details: params.comment ? { comment: params.comment } : undefined,
     });
 
-    return cr;
+    return enrichCRFromStoredPlan(tx, cr);
   });
 }
 
@@ -474,7 +495,7 @@ export async function getIncidentModeState(): Promise<IncidentModeState> {
 
 export async function setIncidentModeState(params: {
   enabled: boolean;
-  by?: string;
+  actor: AuthenticatedActor;
   reason?: string;
 }): Promise<IncidentModeState> {
   await ensureBootstrapped();
@@ -483,7 +504,7 @@ export async function setIncidentModeState(params: {
   return prisma.$transaction(async (tx) => {
     const now = new Date();
     const nowIso = now.toISOString();
-    const actor = params.by?.trim() || "Incident Commander";
+    const actor = params.actor;
     const current = await tx.incidentState.findUnique({
       where: { id: INCIDENT_RECORD_ID },
     });
@@ -496,20 +517,21 @@ export async function setIncidentModeState(params: {
           id: INCIDENT_RECORD_ID,
           isIncidentMode: true,
           activatedAt: now,
-          activatedBy: actor,
+          activatedBy: actor.name,
           reason: params.reason?.trim() || null,
         },
         update: {
           isIncidentMode: true,
           activatedAt: now,
-          activatedBy: actor,
+          activatedBy: actor.name,
           reason: params.reason?.trim() || null,
         },
       });
 
       await appendAuditTx(tx, {
-        actor_id: actor.toLowerCase().replace(/\s+/g, "-"),
-        actor_name: actor,
+        actor_id: actor.id,
+        actor_name: actor.name,
+        actor_role: actor.role,
         action: "incident_mode_enabled",
         details: params.reason ? { reason: params.reason } : undefined,
         risk_level: "high",
@@ -518,7 +540,7 @@ export async function setIncidentModeState(params: {
       next = {
         isIncidentMode: true,
         activatedAt: nowIso,
-        activatedBy: actor,
+        activatedBy: actor.name,
         reason: params.reason?.trim() || undefined,
       };
     } else {
@@ -545,8 +567,9 @@ export async function setIncidentModeState(params: {
       });
 
       await appendAuditTx(tx, {
-        actor_id: actor.toLowerCase().replace(/\s+/g, "-"),
-        actor_name: actor,
+        actor_id: actor.id,
+        actor_name: actor.name,
+        actor_role: actor.role,
         action: "incident_mode_disabled",
         details: {
           ...(params.reason ? { reason: params.reason } : {}),
@@ -570,6 +593,7 @@ export async function setIncidentModeState(params: {
 export async function updatePathRules(
   rules: PathRule[],
   riskThresholds?: Policy["risk_thresholds"],
+  actor?: AuthenticatedActor,
 ): Promise<Policy> {
   await ensureBootstrapped();
   if (riskThresholds && riskThresholds.low_max >= riskThresholds.med_max) {
@@ -599,8 +623,9 @@ export async function updatePathRules(
     });
 
     await appendAuditTx(tx, {
-      actor_id: "policy-admin",
-      actor_name: "Policy Admin",
+      actor_id: actor?.id ?? "policy-admin",
+      actor_name: actor?.name ?? "Policy Admin",
+      actor_role: actor?.role ?? "admin",
       action: "policy_updated",
       target_policy_id: nextPolicy.id,
       details: {
@@ -685,7 +710,10 @@ async function bootstrap(): Promise<void> {
           targetCrId: log.target_cr_id ?? null,
           targetCrTitle: log.target_cr_title ?? null,
           targetPolicyId: log.target_policy_id ?? null,
-          detailsJson: log.details ? toJson(log.details) : undefined,
+          detailsJson:
+            log.details || log.actor_role
+              ? toJson({ ...(log.details ?? {}), actor_role: log.actor_role })
+              : undefined,
           ipAddress: log.ip_address ?? null,
           riskLevel: log.risk_level ?? null,
         },
@@ -735,6 +763,7 @@ function fromChangeRequestRow(row: Prisma.ChangeRequestGetPayload<Record<string,
     risk_score: row.riskScore,
     risk_level: row.riskLevel as RiskLevel,
     plan: row.plan ?? undefined,
+    proposed_commands: undefined,
     patch_summary: parseJson(row.patchSummaryJson, [] as CR["patch_summary"]),
     blast_radius: parseJson(row.blastRadiusJson, { nodes: [], edges: [] } as CR["blast_radius"]),
     evidence: parseJson(row.evidenceJson, [] as CR["evidence"]),
@@ -749,17 +778,22 @@ function fromChangeRequestRow(row: Prisma.ChangeRequestGetPayload<Record<string,
 function fromAuditRow(
   row: Prisma.AuditEntryGetPayload<Record<string, never>>,
 ): AuditLog {
+  const details = parseJson(row.detailsJson, undefined as Record<string, unknown> | undefined);
   return {
     id: row.id,
     timestamp: row.timestamp.toISOString(),
     actor_id: row.actorId,
     actor_name: row.actorName,
+    actor_role: (details?.actor_role as AuditLog["actor_role"]) ?? undefined,
     actor_avatar: row.actorAvatar ?? undefined,
     action: row.action as AuditLog["action"],
     target_cr_id: row.targetCrId ?? undefined,
     target_cr_title: row.targetCrTitle ?? undefined,
     target_policy_id: row.targetPolicyId ?? undefined,
-    details: parseJson(row.detailsJson, undefined),
+    details:
+      details && "actor_role" in details
+        ? Object.fromEntries(Object.entries(details).filter(([key]) => key !== "actor_role"))
+        : details,
     ip_address: row.ipAddress ?? undefined,
     risk_level: (row.riskLevel as AuditLog["risk_level"]) ?? undefined,
   };
@@ -823,14 +857,64 @@ async function appendAuditTx(
       targetCrId: payload.target_cr_id ?? null,
       targetCrTitle: payload.target_cr_title ?? null,
       targetPolicyId: payload.target_policy_id ?? null,
-      detailsJson: payload.details ? toJson(payload.details) : undefined,
+      detailsJson: payload.details
+        ? toJson({ ...payload.details, actor_role: payload.actor_role })
+        : payload.actor_role
+          ? toJson({ actor_role: payload.actor_role })
+          : undefined,
       ipAddress: payload.ip_address ?? null,
       riskLevel: payload.risk_level ?? null,
     },
   });
 }
 
-function toCRFromApproval(request: ApprovalRequest, plan?: StoredPlan): CR {
+async function appendPlanAuditEventsTx(
+  tx: TransactionClient,
+  request: GeneratePlanRequest,
+  response: GeneratePlanResponse,
+): Promise<void> {
+  const actorName = request.requestedBy?.trim() || "AI Planner";
+  const actorId = actorName.toLowerCase().replace(/\s+/g, "-");
+  const baseDetails = {
+    review_mode: response.review.mode,
+    rationale: response.review.rationale,
+    score: response.backendRisk.score,
+    files: response.changes.map((change) => change.path),
+  };
+
+  await appendAuditTx(tx, {
+    actor_id: actorId,
+    actor_name: actorName,
+    actor_role: "developer",
+    action: "plan_generated",
+    risk_level: toRiskLevel(response.backendRisk.score),
+    details: baseDetails,
+  });
+
+  if (response.review.mode === "auto_approved") {
+    await appendAuditTx(tx, {
+      actor_id: actorId,
+      actor_name: actorName,
+      actor_role: "developer",
+      action: "auto_approved_low_risk",
+      risk_level: "low",
+      details: baseDetails,
+    });
+  }
+
+  if (response.review.mode === "approval_required") {
+    await appendAuditTx(tx, {
+      actor_id: actorId,
+      actor_name: actorName,
+      actor_role: "developer",
+      action: "approval_required_high_risk",
+      risk_level: toRiskLevel(response.backendRisk.score),
+      details: baseDetails,
+    });
+  }
+}
+
+function toCRFromApproval(request: ApprovalRequest, plan: StoredPlan | undefined, policy: Policy): CR {
   const now = new Date().toISOString();
 
   const repo = plan ? path.basename(plan.request.context.workspaceRoot) : "workspace";
@@ -838,6 +922,7 @@ function toCRFromApproval(request: ApprovalRequest, plan?: StoredPlan): CR {
 
   const riskLevel = toRiskLevel(request.risk.score);
   const patchSummary = buildPatchSummary(plan);
+  const requiredApprovals = toRequiredApprovals(request.risk.score, policy);
 
   return {
     id: request.approvalId,
@@ -853,25 +938,23 @@ function toCRFromApproval(request: ApprovalRequest, plan?: StoredPlan): CR {
     risk_score: request.risk.score,
     risk_level: riskLevel,
     plan: buildPlanMarkdown(plan, request),
+    proposed_commands: plan?.response.proposedCommands ?? [],
+    review: plan?.response.review ?? request.risk.review,
+    risk_reasons: request.risk.reasons,
+    risk_breakdown: {
+      local_score: request.risk.localScore,
+      backend_score: request.risk.backendScore,
+      final_score: request.risk.score,
+    },
     patch_summary: patchSummary,
     blast_radius: buildBlastRadius(patchSummary, repo),
-    evidence: [
-      {
-        type: "test",
-        status: "skipped",
-        name: "Automated tests",
-        summary: "Tests were not run yet; awaiting approval.",
-      },
-      {
-        type: "lint",
-        status: "skipped",
-        name: "Lint checks",
-        summary: "Not executed while waiting for approval.",
-      },
-    ],
+    evidence: toEvidenceFromRequest(request),
     approvals: [],
-    required_approvals: 1,
-    labels: ["plugin", "approval-required"],
+    required_approvals: requiredApprovals,
+    labels: [
+      "plugin",
+      request.risk.review.mode === "auto_approved" ? "auto-approved" : "approval-required",
+    ],
   };
 }
 
@@ -888,8 +971,17 @@ function buildPatchSummary(plan?: StoredPlan): PatchFile[] {
       path: change.path,
       additions,
       deletions,
-      risk_rules_hit: plan.response.backendRisk.reasons.slice(0, 2),
+      risk_rules_hit: plan.response.review.matchedPolicyRules
+        .filter((rule) => rule.matchedPaths.includes(change.path))
+        .map((rule) => rule.pattern)
+        .slice(0, 2),
       risk_level: toRiskLevel(plan.response.backendRisk.score),
+      is_protected: plan.response.review.matchedPolicyRules.some((rule) =>
+        rule.matchedPaths.includes(change.path),
+      ),
+      risk_categories: plan.response.backendRisk.reasons
+        .filter((reason) => reason.affectedPath === change.path)
+        .map((reason) => reason.category),
     };
   });
 }
@@ -948,12 +1040,116 @@ function buildPlanMarkdown(plan: StoredPlan | undefined, request: ApprovalReques
     "",
     plan.response.summary,
     "",
+    "### Why This Decision Happened",
+    ...plan.response.review.rationale.map((reason) => `- ${reason}`),
+    "",
     "### Proposed File Changes",
     ...changeLines,
     "",
+    "### Proposed Commands",
+    ...(plan.response.proposedCommands.length > 0
+      ? plan.response.proposedCommands.map((command) => `- ${command}`)
+      : ["- No commands proposed."]),
+    "",
     "### Backend Risk Reasons",
-    ...plan.response.backendRisk.reasons.map((reason) => `- ${reason}`),
+    ...plan.response.backendRisk.reasons.map((reason) => `- ${reason.message}`),
   ].join("\n");
+}
+
+async function enrichCRFromStoredPlan(
+  client: Pick<TransactionClient, "approvalTicket" | "storedPlan">,
+  cr: CR,
+): Promise<CR> {
+  const linkedApproval = await client.approvalTicket.findFirst({
+    where: { crId: cr.id },
+    select: { requestJson: true },
+  });
+  if (!linkedApproval) {
+    return cr;
+  }
+
+  const request = parseJson(linkedApproval.requestJson, {} as ApprovalRequest);
+  const planRow = await client.storedPlan.findUnique({
+    where: { planId: request.planId },
+    select: { requestJson: true, responseJson: true, createdAt: true },
+  });
+
+  const plan = planRow
+    ? ({
+        request: parseJson(planRow.requestJson, {} as GeneratePlanRequest),
+        response: parseJson(planRow.responseJson, {} as GeneratePlanResponse),
+        createdAt: planRow.createdAt.toISOString(),
+      } satisfies StoredPlanSnapshot)
+    : undefined;
+
+  if (!plan) {
+    return {
+      ...cr,
+      review: request.risk.review,
+      risk_reasons: request.risk.reasons,
+      risk_breakdown: {
+        local_score: request.risk.localScore,
+        backend_score: request.risk.backendScore,
+        final_score: request.risk.score,
+      },
+      evidence: toEvidenceFromRequest(request),
+    };
+  }
+
+  return {
+    ...cr,
+    plan: buildPlanMarkdown(plan, request),
+    proposed_commands: plan.response.proposedCommands,
+    review: plan.response.review,
+    risk_reasons: request.risk.reasons,
+    risk_breakdown: {
+      local_score: request.risk.localScore,
+      backend_score: request.risk.backendScore,
+      final_score: request.risk.score,
+    },
+    patch_summary: buildPatchSummary(plan),
+    evidence: toEvidenceFromRequest(request),
+  };
+}
+
+function toRequiredApprovals(score: number, policy: Policy): number {
+  const threshold = policy.risk_thresholds.require_dual_approval_above ?? 101;
+  return score >= threshold ? 2 : 1;
+}
+
+function toEvidenceFromRequest(request: ApprovalRequest): CR["evidence"] {
+  if (request.verificationEvidence && request.verificationEvidence.length > 0) {
+    return request.verificationEvidence.map((item) => ({
+      type: item.type,
+      status: item.status,
+      kind: item.kind,
+      name: item.name,
+      command: item.command,
+      scope: item.scope,
+      url: item.url,
+      summary: item.summary,
+      details: item.details,
+    }));
+  }
+
+  return [
+    {
+      type: "test",
+      status: "skipped",
+      kind: "recommended",
+      name: "Automated tests",
+      command: "npm test",
+      summary: "Recommended check: tests were not executed before approval.",
+    },
+    {
+      type: "lint",
+      status: "skipped",
+      kind: "recommended",
+      name: "Lint checks",
+      command: "npm run lint",
+      summary: "Recommended check: lint was not executed before approval.",
+    },
+  ];
 }
 
 function toRiskLevel(score: number): RiskLevel {

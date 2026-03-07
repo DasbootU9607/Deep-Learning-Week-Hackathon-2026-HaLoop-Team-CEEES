@@ -2,12 +2,19 @@ import { RiskLevel } from "@/types/cr";
 import { cn, getRiskBgColor, getRiskScoreColor } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShieldAlert } from "lucide-react";
+import type { ReviewDecision } from "@/lib/server/contracts";
 
 interface RiskScoreCardProps {
   score: number;
   level: RiskLevel;
   requiredApprovals: number;
   approvalsCount: number;
+  review?: ReviewDecision;
+  riskBreakdown?: {
+    local_score?: number;
+    backend_score: number;
+    final_score: number;
+  };
 }
 
 const RISK_LABELS: Record<RiskLevel, string> = {
@@ -16,8 +23,15 @@ const RISK_LABELS: Record<RiskLevel, string> = {
   high: "High Risk",
 };
 
-export function RiskScoreCard({ score, level, requiredApprovals, approvalsCount }: RiskScoreCardProps) {
-  const pct = score;
+export function RiskScoreCard({
+  score,
+  level,
+  requiredApprovals,
+  approvalsCount,
+  review,
+  riskBreakdown,
+}: RiskScoreCardProps) {
+  const pct = riskBreakdown?.final_score ?? score;
   const trackColor = level === "high" ? "#ef4444" : level === "med" ? "#eab308" : "#22c55e";
 
   return (
@@ -68,9 +82,9 @@ export function RiskScoreCard({ score, level, requiredApprovals, approvalsCount 
               {" / "}
               <span className="font-medium text-foreground">{requiredApprovals}</span>
               {" approvals required"}
-              {level === "high" && (
+              {requiredApprovals > 1 && (
                 <div className="text-xs text-yellow-400 mt-1">
-                  ⚠ Dual approval required for high-risk CRs
+                  Dual approval required for high-risk CRs
                 </div>
               )}
             </div>
@@ -81,6 +95,34 @@ export function RiskScoreCard({ score, level, requiredApprovals, approvalsCount 
                 style={{ width: `${pct}%`, backgroundColor: trackColor }}
               />
             </div>
+
+            {riskBreakdown && (
+              <div className="grid grid-cols-3 gap-2 pt-2 text-xs">
+                <div className="rounded border border-border bg-secondary/20 px-2 py-1">
+                  <div className="text-muted-foreground">Local</div>
+                  <div className="font-semibold text-foreground">{riskBreakdown.local_score ?? 0}</div>
+                </div>
+                <div className="rounded border border-border bg-secondary/20 px-2 py-1">
+                  <div className="text-muted-foreground">Backend</div>
+                  <div className="font-semibold text-foreground">{riskBreakdown.backend_score}</div>
+                </div>
+                <div className="rounded border border-border bg-secondary/20 px-2 py-1">
+                  <div className="text-muted-foreground">Final</div>
+                  <div className="font-semibold text-foreground">{riskBreakdown.final_score}</div>
+                </div>
+              </div>
+            )}
+
+            {review && (
+              <div className="rounded-lg border border-border bg-secondary/20 p-3 text-xs text-muted-foreground">
+                <div className="mb-2 font-medium text-foreground">Why this decision happened</div>
+                <div className="space-y-1">
+                  {review.rationale.map((line) => (
+                    <div key={line}>{line}</div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

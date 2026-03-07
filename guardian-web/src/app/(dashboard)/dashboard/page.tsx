@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CRStatusBadge } from "@/components/cr/CRStatusBadge";
 import { fetchCRList } from "@/lib/api/cr";
+import { fetchRuntimeModeSummary } from "@/lib/api/runtime";
 import { useIncidentMode } from "@/hooks/useIncidentMode";
 import { cn, formatRelativeTime, getRiskBgColor } from "@/lib/utils";
 import { GitPullRequest, ShieldAlert, CheckCircle, AlertOctagon, ArrowRight, Sparkles } from "lucide-react";
@@ -50,6 +51,11 @@ export default function DashboardPage() {
     queryFn: () => fetchCRList(),
     staleTime: 30_000,
     refetchInterval: 2_000,
+  });
+  const { data: runtimeMode } = useQuery({
+    queryKey: ["runtime-mode"],
+    queryFn: fetchRuntimeModeSummary,
+    staleTime: 30_000,
   });
   const { isIncidentMode } = useIncidentMode();
 
@@ -118,6 +124,28 @@ export default function DashboardPage() {
               />
             </>
           )}
+        </section>
+
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <Card className="xl:col-span-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Runtime Mode</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/20 px-4 py-3">
+                <span className="text-muted-foreground">Mode</span>
+                <span className="font-semibold uppercase text-foreground">{runtimeMode?.mode ?? "demo"}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/20 px-4 py-3">
+                <span className="text-muted-foreground">Queue</span>
+                <span className="font-semibold text-foreground">{runtimeMode?.queueEnabled ? "enabled" : "disabled"}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/20 px-4 py-3">
+                <span className="text-muted-foreground">Datastore</span>
+                <span className="font-semibold text-foreground">{runtimeMode?.datastore ?? "demo-json"}</span>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">

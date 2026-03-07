@@ -13,6 +13,7 @@ import {
   GeneratePlanRequest,
   GeneratePlanResponse,
 } from "@/lib/server/contracts";
+import { AuthenticatedActor } from "@/lib/server/auth";
 
 export type StoredPlanSnapshot = {
   request: GeneratePlanRequest;
@@ -149,6 +150,8 @@ export async function saveGeneratedPlan(params: {
       response: params.response,
       createdAt: new Date().toISOString(),
     };
+
+    appendPlanAuditEvents(db, params.request, params.response);
   });
 }
 
@@ -170,7 +173,7 @@ export async function createApprovalTicket(request: ApprovalRequest): Promise<Ap
     }
 
     const plan = db.plans[request.planId];
-    const cr = toCRFromApproval(request, plan);
+    const cr = toCRFromApproval(request, plan, db.policy);
     db.crs.unshift(cr);
 
     db.approvals[request.approvalId] = {
@@ -182,6 +185,7 @@ export async function createApprovalTicket(request: ApprovalRequest): Promise<Ap
     appendAudit(db, {
       actor_id: request.requestedBy,
       actor_name: request.requestedBy,
+      actor_role: request.requestedByRole ?? "developer",
       action: "cr_submitted",
       target_cr_id: cr.id,
       target_cr_title: cr.title,
@@ -189,6 +193,7 @@ export async function createApprovalTicket(request: ApprovalRequest): Promise<Ap
       details: {
         source: "ide-plugin",
         approval_id: request.approvalId,
+        required_approvals: cr.required_approvals,
       },
     });
 
@@ -221,13 +226,14 @@ export async function listCRs(filters: CRFilters = {}): Promise<CRListItem[]> {
 
 export async function getCRById(id: string): Promise<CR | undefined> {
   const db = await readStore();
-  return db.crs.find((cr) => cr.id === id);
+  const cr = db.crs.find((candidate) => candidate.id === id);
+  return cr ? enrichCRFromStoredPlan(cr, db.approvals, db.plans) : undefined;
 }
 
 export async function applyReviewAction(params: {
   crId: string;
   action: "approved" | "rejected" | "changes_requested";
-  reviewer?: string;
+  actor: AuthenticatedActor;
   comment?: string;
 }): Promise<CR | undefined> {
   return withWrite(async (db) => {
@@ -241,11 +247,19 @@ export async function applyReviewAction(params: {
     }
 
     const now = new Date().toISOString();
-    const reviewer = params.reviewer ?? "Web Reviewer";
+    const reviewerId = params.actor.id;
+    const reviewer = params.actor.name;
+
+    if (
+      params.action === "approved" &&
+      cr.approvals.some((approval) => approval.action === "approved" && approval.reviewer_id === reviewerId)
+    ) {
+      throw new Error("A reviewer cannot approve the same CR twice.");
+    }
 
     cr.approvals.push({
       id: randomUUID(),
-      reviewer_id: reviewer.toLowerCase().replace(/\s+/g, "-"),
+      reviewer_id: reviewerId,
       reviewer_name: reviewer,
       action: params.action,
       comment: params.comment,
@@ -285,8 +299,9 @@ export async function applyReviewAction(params: {
     }
 
     appendAudit(db, {
-      actor_id: reviewer.toLowerCase().replace(/\s+/g, "-"),
+      actor_id: reviewerId,
       actor_name: reviewer,
+      actor_role: params.actor.role,
       action:
         params.action === "approved"
           ? "cr_approved"
@@ -323,24 +338,25 @@ export async function getIncidentModeState(): Promise<IncidentModeState> {
 
 export async function setIncidentModeState(params: {
   enabled: boolean;
-  by?: string;
+  actor: AuthenticatedActor;
   reason?: string;
 }): Promise<IncidentModeState> {
   return withWrite(async (db) => {
     const now = new Date().toISOString();
-    const actor = params.by?.trim() || "Incident Commander";
+    const actor = params.actor;
 
     if (params.enabled) {
       db.incident = {
         isIncidentMode: true,
         activatedAt: now,
-        activatedBy: actor,
+        activatedBy: actor.name,
         reason: params.reason?.trim() || undefined,
       };
 
       appendAudit(db, {
-        actor_id: actor.toLowerCase().replace(/\s+/g, "-"),
-        actor_name: actor,
+        actor_id: actor.id,
+        actor_name: actor.name,
+        actor_role: actor.role,
         action: "incident_mode_enabled",
         details: params.reason ? { reason: params.reason } : undefined,
         risk_level: "high",
@@ -359,8 +375,9 @@ export async function setIncidentModeState(params: {
       };
 
       appendAudit(db, {
-        actor_id: actor.toLowerCase().replace(/\s+/g, "-"),
-        actor_name: actor,
+        actor_id: actor.id,
+        actor_name: actor.name,
+        actor_role: actor.role,
         action: "incident_mode_disabled",
         details: {
           ...(params.reason ? { reason: params.reason } : {}),
@@ -377,6 +394,7 @@ export async function setIncidentModeState(params: {
 export async function updatePathRules(
   rules: PathRule[],
   riskThresholds?: Policy["risk_thresholds"],
+  actor?: AuthenticatedActor,
 ): Promise<Policy> {
   return withWrite(async (db) => {
     if (riskThresholds && riskThresholds.low_max >= riskThresholds.med_max) {
@@ -391,8 +409,9 @@ export async function updatePathRules(
     db.policy.updated_at = new Date().toISOString();
 
     appendAudit(db, {
-      actor_id: "policy-admin",
-      actor_name: "Policy Admin",
+      actor_id: actor?.id ?? "policy-admin",
+      actor_name: actor?.name ?? "Policy Admin",
+      actor_role: actor?.role ?? "admin",
       action: "policy_updated",
       target_policy_id: db.policy.id,
       details: {
@@ -483,6 +502,52 @@ function appendAudit(
   });
 }
 
+function appendPlanAuditEvents(
+  store: StoreState,
+  request: GeneratePlanRequest,
+  response: GeneratePlanResponse,
+): void {
+  const actorName = request.requestedBy?.trim() || "AI Planner";
+  const actorId = actorName.toLowerCase().replace(/\s+/g, "-");
+  const baseDetails = {
+    review_mode: response.review.mode,
+    rationale: response.review.rationale,
+    score: response.backendRisk.score,
+    files: response.changes.map((change) => change.path),
+  };
+
+  appendAudit(store, {
+    actor_id: actorId,
+    actor_name: actorName,
+    actor_role: "developer",
+    action: "plan_generated",
+    risk_level: toRiskLevel(response.backendRisk.score),
+    details: baseDetails,
+  });
+
+  if (response.review.mode === "auto_approved") {
+    appendAudit(store, {
+      actor_id: actorId,
+      actor_name: actorName,
+      actor_role: "developer",
+      action: "auto_approved_low_risk",
+      risk_level: "low",
+      details: baseDetails,
+    });
+  }
+
+  if (response.review.mode === "approval_required") {
+    appendAudit(store, {
+      actor_id: actorId,
+      actor_name: actorName,
+      actor_role: "developer",
+      action: "approval_required_high_risk",
+      risk_level: toRiskLevel(response.backendRisk.score),
+      details: baseDetails,
+    });
+  }
+}
+
 function matchCRFilters(cr: CR, filters: CRFilters): boolean {
   if (filters.repo && filters.repo !== "all" && cr.repo !== filters.repo) {
     return false;
@@ -544,7 +609,7 @@ function matchAuditFilters(log: AuditLog, filters: AuditFilters): boolean {
   return true;
 }
 
-function toCRFromApproval(request: ApprovalRequest, plan?: StoredPlan): CR {
+function toCRFromApproval(request: ApprovalRequest, plan: StoredPlan | undefined, policy: Policy): CR {
   const now = new Date().toISOString();
 
   const repo = plan ? path.basename(plan.request.context.workspaceRoot) : "workspace";
@@ -552,6 +617,7 @@ function toCRFromApproval(request: ApprovalRequest, plan?: StoredPlan): CR {
 
   const riskLevel = toRiskLevel(request.risk.score);
   const patchSummary = buildPatchSummary(plan);
+  const requiredApprovals = toRequiredApprovals(request.risk.score, policy);
 
   return {
     id: request.approvalId,
@@ -567,25 +633,23 @@ function toCRFromApproval(request: ApprovalRequest, plan?: StoredPlan): CR {
     risk_score: request.risk.score,
     risk_level: riskLevel,
     plan: buildPlanMarkdown(plan, request),
+    proposed_commands: plan?.response.proposedCommands ?? [],
+    review: plan?.response.review ?? request.risk.review,
+    risk_reasons: request.risk.reasons,
+    risk_breakdown: {
+      local_score: request.risk.localScore,
+      backend_score: request.risk.backendScore,
+      final_score: request.risk.score,
+    },
     patch_summary: patchSummary,
     blast_radius: buildBlastRadius(patchSummary, repo),
-    evidence: [
-      {
-        type: "test",
-        status: "skipped",
-        name: "Automated tests",
-        summary: "Tests were not run yet; awaiting approval.",
-      },
-      {
-        type: "lint",
-        status: "skipped",
-        name: "Lint checks",
-        summary: "Not executed while waiting for approval.",
-      },
-    ],
+    evidence: toEvidenceFromRequest(request),
     approvals: [],
-    required_approvals: 1,
-    labels: ["plugin", "approval-required"],
+    required_approvals: requiredApprovals,
+    labels: [
+      "plugin",
+      request.risk.review.mode === "auto_approved" ? "auto-approved" : "approval-required",
+    ],
   };
 }
 
@@ -602,8 +666,17 @@ function buildPatchSummary(plan?: StoredPlan): PatchFile[] {
       path: change.path,
       additions,
       deletions,
-      risk_rules_hit: plan.response.backendRisk.reasons.slice(0, 2),
+      risk_rules_hit: plan.response.review.matchedPolicyRules
+        .filter((rule) => rule.matchedPaths.includes(change.path))
+        .map((rule) => rule.pattern)
+        .slice(0, 2),
       risk_level: toRiskLevel(plan.response.backendRisk.score),
+      is_protected: plan.response.review.matchedPolicyRules.some((rule) =>
+        rule.matchedPaths.includes(change.path),
+      ),
+      risk_categories: plan.response.backendRisk.reasons
+        .filter((reason) => reason.affectedPath === change.path)
+        .map((reason) => reason.category),
     };
   });
 }
@@ -662,12 +735,100 @@ function buildPlanMarkdown(plan: StoredPlan | undefined, request: ApprovalReques
     "",
     plan.response.summary,
     "",
+    "### Why This Decision Happened",
+    ...plan.response.review.rationale.map((reason) => `- ${reason}`),
+    "",
     "### Proposed File Changes",
     ...changeLines,
     "",
+    "### Proposed Commands",
+    ...(plan.response.proposedCommands.length > 0
+      ? plan.response.proposedCommands.map((command) => `- ${command}`)
+      : ["- No commands proposed."]),
+    "",
     "### Backend Risk Reasons",
-    ...plan.response.backendRisk.reasons.map((reason) => `- ${reason}`),
+    ...plan.response.backendRisk.reasons.map((reason) => `- ${reason.message}`),
   ].join("\n");
+}
+
+function toRequiredApprovals(score: number, policy: Policy): number {
+  const threshold = policy.risk_thresholds.require_dual_approval_above ?? 101;
+  return score >= threshold ? 2 : 1;
+}
+
+function toEvidenceFromRequest(request: ApprovalRequest): CR["evidence"] {
+  if (request.verificationEvidence && request.verificationEvidence.length > 0) {
+    return request.verificationEvidence.map((item) => ({
+      type: item.type,
+      status: item.status,
+      kind: item.kind,
+      name: item.name,
+      command: item.command,
+      scope: item.scope,
+      url: item.url,
+      summary: item.summary,
+      details: item.details,
+    }));
+  }
+
+  return [
+    {
+      type: "test",
+      status: "skipped",
+      kind: "recommended",
+      name: "Automated tests",
+      command: "npm test",
+      summary: "Recommended check: tests were not executed before approval.",
+    },
+    {
+      type: "lint",
+      status: "skipped",
+      kind: "recommended",
+      name: "Lint checks",
+      command: "npm run lint",
+      summary: "Recommended check: lint was not executed before approval.",
+    },
+  ];
+}
+
+function enrichCRFromStoredPlan(
+  cr: CR,
+  approvals: Record<string, ApprovalTicket>,
+  plans: Record<string, StoredPlan>,
+): CR {
+  const linkedApproval = Object.values(approvals).find((ticket) => ticket.crId === cr.id);
+  if (!linkedApproval) {
+    return cr;
+  }
+
+  const plan = plans[linkedApproval.request.planId];
+  if (!plan) {
+    return {
+      ...cr,
+      review: linkedApproval.request.risk.review,
+      risk_reasons: linkedApproval.request.risk.reasons,
+      risk_breakdown: {
+        local_score: linkedApproval.request.risk.localScore,
+        backend_score: linkedApproval.request.risk.backendScore,
+        final_score: linkedApproval.request.risk.score,
+      },
+    };
+  }
+
+  return {
+    ...cr,
+    plan: buildPlanMarkdown(plan, linkedApproval.request),
+    proposed_commands: plan.response.proposedCommands,
+    review: plan.response.review,
+    risk_reasons: linkedApproval.request.risk.reasons,
+    risk_breakdown: {
+      local_score: linkedApproval.request.risk.localScore,
+      backend_score: linkedApproval.request.risk.backendScore,
+      final_score: linkedApproval.request.risk.score,
+    },
+    patch_summary: buildPatchSummary(plan),
+    evidence: toEvidenceFromRequest(linkedApproval.request),
+  };
 }
 
 function toRiskLevel(score: number): RiskLevel {

@@ -1,11 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ReviewDecision, RiskReason } from "@/lib/server/contracts";
 import { FileText } from "lucide-react";
 
 interface PlanViewerProps {
   plan?: string;
+  review?: ReviewDecision;
+  commands?: string[];
+  riskReasons?: RiskReason[];
 }
 
-export function PlanViewer({ plan }: PlanViewerProps) {
+export function PlanViewer({ plan, review, commands = [], riskReasons = [] }: PlanViewerProps) {
   if (!plan) {
     return (
       <Card>
@@ -84,6 +88,54 @@ export function PlanViewer({ plan }: PlanViewerProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {review && (
+          <div className="mb-4 rounded-lg border border-border bg-secondary/20 p-4 text-sm">
+            <div className="mb-2 font-medium text-foreground">Why this decision happened</div>
+            <div className="space-y-1 text-muted-foreground">
+              {review.rationale.map((line) => (
+                <div key={line}>{line}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {commands.length > 0 && (
+          <div className="mb-4 rounded-lg border border-border bg-secondary/20 p-4 text-sm">
+            <div className="mb-2 font-medium text-foreground">Proposed commands</div>
+            <div className="space-y-2">
+              {commands.map((command) => (
+                <div
+                  key={command}
+                  className={`rounded border px-3 py-2 font-mono text-xs ${
+                    /(rm\s+-rf|drop\s+database|truncate\b|git\s+reset\s+--hard|terraform\s+destroy)/i.test(command)
+                      ? "border-red-500/40 bg-red-500/10 text-red-200"
+                      : "border-border bg-background/60 text-foreground"
+                  }`}
+                >
+                  {command}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {riskReasons.length > 0 && (
+          <div className="mb-4 rounded-lg border border-border bg-secondary/20 p-4 text-sm">
+            <div className="mb-2 font-medium text-foreground">Risk signals</div>
+            <div className="space-y-2">
+              {riskReasons.map((reason, index) => (
+                <div key={`${reason.message}-${index}`} className="rounded border border-border bg-background/50 px-3 py-2">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {reason.source} · {reason.category} · weight {reason.weight}
+                  </div>
+                  <div className="text-sm text-foreground">{reason.message}</div>
+                  {reason.affectedPath && <div className="font-mono text-xs text-muted-foreground">{reason.affectedPath}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="prose prose-invert prose-sm max-w-none space-y-1">
           {renderMarkdown(plan)}
         </div>

@@ -1,3 +1,5 @@
+import type { MatchedPolicyRule, RiskReason, ReviewDecision, VerificationEvidence } from "../schemas/contracts";
+
 export type UiStatus =
   | "IDLE"
   | "COLLECTING_CONTEXT"
@@ -24,15 +26,20 @@ export type PlanView = {
   backendRisk: {
     score: number;
     level: "low" | "medium" | "high";
-    reasons: string[];
+    reasons: RiskReason[];
   };
+  review: ReviewDecision;
 };
 
 export type RiskView = {
   localRiskScore: number;
+  backendRiskScore: number;
   finalRiskScore: number;
-  decision: "ALLOW" | "ALLOW_WITH_WARNING" | "REQUIRE_APPROVAL";
-  reasons: string[];
+  decision: "ALLOW" | "ALLOW_WITH_WARNING" | "REQUIRE_APPROVAL" | "BLOCKED";
+  reasons: RiskReason[];
+  rationale: string[];
+  matchedPolicyRules: MatchedPolicyRule[];
+  guardrailsPassed: ReviewDecision["guardrailsPassed"];
   warning?: string;
 };
 
@@ -43,6 +50,7 @@ export type PluginUiState = {
   approvalId?: string;
   plan?: PlanView;
   risk?: RiskView;
+  verificationEvidence?: VerificationEvidence[];
   error?: string;
   events: string[];
 };

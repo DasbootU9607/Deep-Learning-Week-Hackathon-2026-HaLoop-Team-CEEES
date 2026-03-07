@@ -6,6 +6,9 @@ import { getConfiguredBackendUrl, resolveBackendUrl } from "./backendUrl";
 import {
   ApprovalDecisionEvent,
   ApprovalRequest,
+  ReviewDecision,
+  RiskReason,
+  VerificationEvidence,
   approvalDecisionEventSchema,
   approvalRequestSchema
 } from "../schemas/contracts";
@@ -32,25 +35,34 @@ export class ApprovalClient {
   public async createApprovalRequest(params: {
     planId: string;
     sessionId: string;
+    backendRiskScore: number;
+    review: ReviewDecision;
     riskScore: number;
-    reasons: string[];
+    reasons: RiskReason[];
     files: string[];
     commandCount: number;
+    localRiskScore?: number;
+    verificationEvidence?: VerificationEvidence[];
   }): Promise<ApprovalRequestResult> {
     const request: ApprovalRequest = {
       approvalId: randomUUID(),
       planId: params.planId,
       sessionId: params.sessionId,
       requestedBy: this.getRequestedBy(),
+      requestedByRole: "developer",
       risk: {
         score: Math.max(70, Math.min(100, Math.round(params.riskScore))),
+        localScore: params.localRiskScore,
+        backendScore: Math.max(0, Math.min(100, Math.round(params.backendRiskScore))),
         level: "high",
-        reasons: params.reasons
+        reasons: params.reasons,
+        review: params.review
       },
       blastRadius: {
         files: params.files,
         commandCount: params.commandCount
       },
+      verificationEvidence: params.verificationEvidence,
       createdAt: new Date().toISOString()
     };
 

@@ -17,7 +17,19 @@ function basePlan(overrides: Partial<GeneratePlanResponse> = {}): GeneratePlanRe
     backendRisk: {
       score: 10,
       level: "low",
-      reasons: []
+      reasons: [],
+    },
+    review: {
+      mode: "auto_approved",
+      rationale: ["Risk score is 10, below the auto-approve threshold."],
+      matchedPolicyRules: [],
+      guardrailsPassed: {
+        destructiveCommands: true,
+        protectedPaths: true,
+        secrets: true,
+        blastRadius: true,
+        diffSize: true,
+      },
     },
     ...overrides
   };
@@ -39,8 +51,27 @@ describe("RiskGate", () => {
         backendRisk: {
           score: 55,
           level: "medium",
-          reasons: ["cross-module change"]
-        }
+          reasons: [
+            {
+              source: "backend",
+              category: "blast_radius",
+              message: "Cross-module change observed.",
+              weight: 18,
+            },
+          ],
+        },
+        review: {
+          mode: "warning",
+          rationale: ["Manual approval is not required, but review is recommended."],
+          matchedPolicyRules: [],
+          guardrailsPassed: {
+            destructiveCommands: true,
+            protectedPaths: true,
+            secrets: true,
+            blastRadius: false,
+            diffSize: true,
+          },
+        },
       })
     );
 
@@ -59,7 +90,7 @@ describe("RiskGate", () => {
 
     expect(result.decision).toBe("REQUIRE_APPROVAL");
     expect(result.finalRiskScore).toBeGreaterThanOrEqual(70);
-    expect(result.reasons.some((reason) => reason.includes("Destructive command"))).toBe(true);
+    expect(result.reasons.some((reason) => /destructive command/i.test(reason.message))).toBe(true);
   });
 
   it("uses max(local, backend) for final risk", () => {
@@ -69,12 +100,82 @@ describe("RiskGate", () => {
         backendRisk: {
           score: 82,
           level: "high",
-          reasons: ["backend high risk"]
-        }
+          reasons: [
+            {
+              source: "policy",
+              category: "path",
+              message: "Backend marked auth path as protected.",
+              affectedPath: "src/auth/guard.ts",
+              weight: 60,
+            },
+          ],
+        },
+        review: {
+          mode: "approval_required",
+          rationale: ["Approval required because a protected path was modified."],
+          matchedPolicyRules: [
+            {
+              id: "rule-auth",
+              pattern: "**/auth/**",
+              type: "require_approval",
+              matchedPaths: ["src/auth/guard.ts"],
+            },
+          ],
+          guardrailsPassed: {
+            destructiveCommands: true,
+            protectedPaths: false,
+            secrets: true,
+            blastRadius: true,
+            diffSize: true,
+          },
+        },
       })
     );
 
     expect(result.finalRiskScore).toBe(82);
     expect(result.decision).toBe("REQUIRE_APPROVAL");
+  });
+
+  it("returns BLOCKED when backend review blocks the plan", () => {
+    const gate = new RiskGate();
+    const result = gate.evaluate(
+      basePlan({
+        backendRisk: {
+          score: 100,
+          level: "high",
+          reasons: [
+            {
+              source: "policy",
+              category: "path",
+              message: "Policy blocks production infra edits.",
+              affectedPath: "infra/prod/deploy.yaml",
+              weight: 90,
+            },
+          ],
+        },
+        review: {
+          mode: "blocked",
+          rationale: ["Policy blocks this request outright."],
+          matchedPolicyRules: [
+            {
+              id: "rule-prod-deny",
+              pattern: "infra/prod/**",
+              type: "deny",
+              matchedPaths: ["infra/prod/deploy.yaml"],
+            },
+          ],
+          guardrailsPassed: {
+            destructiveCommands: true,
+            protectedPaths: false,
+            secrets: true,
+            blastRadius: true,
+            diffSize: true,
+          },
+        },
+      })
+    );
+
+    expect(result.decision).toBe("BLOCKED");
+    expect(result.warning).toContain("blocked");
   });
 });

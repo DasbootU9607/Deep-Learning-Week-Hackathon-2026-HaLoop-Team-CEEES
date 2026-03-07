@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mirrorApprovalDecision } from "@/lib/server/backendMirror";
+import { AuthError, requirePermission } from "@/lib/server/auth";
 import {
   applyReviewAction,
+  getActivePolicy,
   getCRById,
   isIncidentModeApprovalError,
 } from "@/lib/server/dataStore";
@@ -27,16 +29,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const { requestId, newStatus } = parsed.data;
-    const reviewer = parsed.data.reviewer || "API Reviewer";
     const reason = parsed.data.reason;
     const action = newStatus === "APPROVED" ? "approved" : "rejected";
+    const policy = await getActivePolicy();
+    const actor = requirePermission(request, policy, newStatus === "APPROVED" ? "approve" : "reject");
 
     const existingCR = await getCRById(requestId);
     if (existingCR) {
       const updated = await applyReviewAction({
         crId: requestId,
         action,
-        reviewer,
+        actor,
         comment: reason,
       });
 
@@ -48,7 +51,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const mirrored = await mirrorApprovalDecision({
       approvalId: requestId,
       decision: newStatus === "APPROVED" ? "approved" : "denied",
-      reviewer,
+      reviewer: actor.name,
       reason,
     });
 
@@ -61,6 +64,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       status: newStatus,
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: toErrorMessage(error) }, { status: error.status });
+    }
     if (isIncidentModeApprovalError(error)) {
       return NextResponse.json({ error: toErrorMessage(error) }, { status: 409 });
     }

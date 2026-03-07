@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
@@ -16,7 +17,7 @@ import { ApprovalClient } from "./infra/approvalClient";
 import { GitClient } from "./infra/gitClient";
 import { Logger } from "./infra/logger";
 import { SupabaseRealtimeClient } from "./infra/supabaseRealtime";
-import { GeneratePlanResponse, generatePlanRequestSchema } from "./schemas/contracts";
+import { GeneratePlanResponse, VerificationEvidence, generatePlanRequestSchema } from "./schemas/contracts";
 import { HostToWebviewMessage, WebviewToHostMessage, isWebviewToHostMessage } from "./webview/messageBridge";
 import { PlanView, PluginUiState } from "./webview/uiState";
 
@@ -62,6 +63,7 @@ class ExtensionHost implements vscode.Disposable {
   private currentRisk: RiskEvaluation | undefined;
   private currentContext: Awaited<ReturnType<ContextCollector["collect"]>> | undefined;
   private currentApprovalId: string | undefined;
+  private currentVerificationEvidence: VerificationEvidence[] = [];
   private latestManifest: SessionManifest | undefined;
   private pendingDecisionCancel: (() => void) | undefined;
   private lastError: string | undefined;
@@ -201,6 +203,7 @@ class ExtensionHost implements vscode.Disposable {
       this.currentPlan = undefined;
       this.currentRisk = undefined;
       this.currentApprovalId = undefined;
+      this.currentVerificationEvidence = [];
 
       this.currentSessionId = randomUUID();
       this.transition("COLLECTING_CONTEXT");
@@ -214,6 +217,7 @@ class ExtensionHost implements vscode.Disposable {
 
       const request = generatePlanRequestSchema.parse({
         sessionId: this.currentSessionId,
+        requestedBy: this.getRequestedBy(),
         prompt,
         context
       });
@@ -223,15 +227,31 @@ class ExtensionHost implements vscode.Disposable {
       this.currentRisk = this.riskGate.evaluate(plan);
 
       this.addEvent(`Plan ready: ${plan.changes.length} file(s), risk=${this.currentRisk.finalRiskScore}.`);
+      this.addEvent("Running allowlisted verification checks.");
+      await this.publishState();
+
+      this.currentVerificationEvidence = await this.collectVerificationEvidence(context.workspaceRoot);
+      this.addEvent(summarizeVerificationEvidence(this.currentVerificationEvidence));
+
+      if (this.currentRisk.decision === "BLOCKED") {
+        this.transition("PREVIEW_READY");
+        this.addEvent("Plan is blocked by policy and cannot be applied.");
+        await this.publishState();
+        return;
+      }
 
       if (this.currentRisk.decision === "REQUIRE_APPROVAL") {
         const approvalResult = await this.approvalClient.createApprovalRequest({
           planId: plan.planId,
           sessionId: this.currentSessionId,
+          backendRiskScore: plan.backendRisk.score,
+          review: plan.review,
           riskScore: this.currentRisk.finalRiskScore,
           reasons: this.currentRisk.reasons,
           files: plan.changes.map((change) => change.path),
-          commandCount: plan.proposedCommands.length
+          commandCount: plan.proposedCommands.length,
+          localRiskScore: this.currentRisk.localRiskScore,
+          verificationEvidence: this.currentVerificationEvidence,
         });
         const approval = approvalResult.request;
 
@@ -311,6 +331,7 @@ class ExtensionHost implements vscode.Disposable {
     this.currentApprovalId = undefined;
     this.currentPlan = undefined;
     this.currentRisk = undefined;
+    this.currentVerificationEvidence = [];
     this.lastError = undefined;
 
     if (this.stateMachine.getState() !== "IDLE") {
@@ -370,12 +391,17 @@ class ExtensionHost implements vscode.Disposable {
       risk: this.currentRisk
         ? {
             localRiskScore: this.currentRisk.localRiskScore,
+            backendRiskScore: this.currentRisk.backendRiskScore,
             finalRiskScore: this.currentRisk.finalRiskScore,
             decision: this.currentRisk.decision,
             reasons: this.currentRisk.reasons,
+            rationale: this.currentRisk.rationale,
+            matchedPolicyRules: this.currentRisk.matchedPolicyRules,
+            guardrailsPassed: this.currentRisk.guardrailsPassed,
             warning: this.currentRisk.warning
           }
         : undefined,
+      verificationEvidence: this.currentVerificationEvidence,
       error: this.lastError,
       events: this.eventLog.slice(-10)
     };
@@ -391,7 +417,11 @@ class ExtensionHost implements vscode.Disposable {
       return true;
     }
 
-    return state === "PREVIEW_READY" && this.currentRisk.decision !== "REQUIRE_APPROVAL";
+    return (
+      state === "PREVIEW_READY" &&
+      this.currentRisk.decision !== "REQUIRE_APPROVAL" &&
+      this.currentRisk.decision !== "BLOCKED"
+    );
   }
 
   private handleError(error: unknown): void {
@@ -421,6 +451,47 @@ class ExtensionHost implements vscode.Disposable {
     this.logger.info(line);
   }
 
+  private getRequestedBy(): string {
+    return String(vscode.workspace.getConfiguration("aiGov").get<string>("requestedBy") ?? "local-dev").trim();
+  }
+
+  private async collectVerificationEvidence(workspaceRoot: string): Promise<VerificationEvidence[]> {
+    const candidates = resolveVerificationCandidates(workspaceRoot);
+    if (candidates.length === 0) {
+      return [
+        {
+          type: "lint",
+          status: "skipped",
+          kind: "recommended",
+          name: "Verification checks",
+          command: "npm run lint",
+          summary: "Recommended check: add a repository-specific allowlist for lint or test execution.",
+        },
+      ];
+    }
+
+    const results: VerificationEvidence[] = [];
+    for (const candidate of candidates) {
+      if (!candidate.shouldExecute) {
+        results.push({
+          type: candidate.type,
+          status: "skipped",
+          kind: "recommended",
+          name: candidate.name,
+          command: candidate.command,
+          scope: candidate.scope,
+          summary: `Recommended check: ${candidate.command} in ${candidate.scope}.`,
+          details: "Execution skipped because the target package.json could not be found.",
+        });
+        continue;
+      }
+
+      results.push(await runVerificationCandidate(candidate));
+    }
+
+    return results;
+  }
+
   private renderWebviewHtml(webview: vscode.Webview): string {
     const distRoot = path.join(this.context.extensionPath, "dist", "webview");
     const htmlPath = path.join(distRoot, "index.html");
@@ -442,6 +513,16 @@ class ExtensionHost implements vscode.Disposable {
   }
 }
 
+type VerificationCandidate = {
+  type: "test" | "lint";
+  name: string;
+  command: "npm test" | "npm run lint";
+  cwd: string;
+  scope: string;
+  shouldExecute: boolean;
+  timeoutMs: number;
+};
+
 function toPlanView(plan: GeneratePlanResponse): PlanView {
   return {
     planId: plan.planId,
@@ -451,8 +532,175 @@ function toPlanView(plan: GeneratePlanResponse): PlanView {
       action: change.action
     })),
     proposedCommands: plan.proposedCommands,
-    backendRisk: plan.backendRisk
+    backendRisk: plan.backendRisk,
+    review: plan.review
   };
+}
+
+function resolveVerificationCandidates(workspaceRoot: string): VerificationCandidate[] {
+  const candidates: VerificationCandidate[] = [];
+  const repoRoot = workspaceRoot || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd();
+  const guardianWebDir = path.join(repoRoot, "guardian-web");
+  const idePluginDir = path.join(repoRoot, "ide-plugin");
+
+  candidates.push({
+    type: "lint",
+    name: "Guardian Web lint",
+    command: "npm run lint",
+    cwd: guardianWebDir,
+    scope: "guardian-web",
+    shouldExecute: fs.existsSync(path.join(guardianWebDir, "package.json")),
+    timeoutMs: 120_000,
+  });
+
+  candidates.push({
+    type: "test",
+    name: "IDE plugin tests",
+    command: "npm test",
+    cwd: idePluginDir,
+    scope: "ide-plugin",
+    shouldExecute: fs.existsSync(path.join(idePluginDir, "package.json")),
+    timeoutMs: 120_000,
+  });
+
+  if (candidates.some((candidate) => candidate.shouldExecute)) {
+    return candidates;
+  }
+
+  const rootPackageJson = path.join(repoRoot, "package.json");
+  if (fs.existsSync(rootPackageJson)) {
+    return [
+      {
+        type: "lint",
+        name: "Repository lint",
+        command: "npm run lint",
+        cwd: repoRoot,
+        scope: path.basename(repoRoot),
+        shouldExecute: true,
+        timeoutMs: 120_000,
+      },
+      {
+        type: "test",
+        name: "Repository tests",
+        command: "npm test",
+        cwd: repoRoot,
+        scope: path.basename(repoRoot),
+        shouldExecute: true,
+        timeoutMs: 120_000,
+      },
+    ];
+  }
+
+  return candidates;
+}
+
+function runVerificationCandidate(candidate: VerificationCandidate): Promise<VerificationEvidence> {
+  return new Promise((resolve) => {
+    const [command, ...args] = candidate.command.split(" ");
+    const child = spawn(command, args, {
+      cwd: candidate.cwd,
+      shell: false,
+      env: process.env,
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const finish = (evidence: VerificationEvidence): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(evidence);
+    };
+
+    const timeout = setTimeout(() => {
+      child.kill();
+      finish({
+        type: candidate.type,
+        status: "warning",
+        kind: "executed",
+        name: candidate.name,
+        command: candidate.command,
+        scope: candidate.scope,
+        summary: `Executed check timed out after ${Math.round(candidate.timeoutMs / 1000)}s.`,
+        details: trimOutput([stdout, stderr].filter(Boolean).join("\n")) || "No output captured before timeout.",
+      });
+    }, candidate.timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      stdout = trimOutput(`${stdout}${chunk}`);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = trimOutput(`${stderr}${chunk}`);
+    });
+
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      finish({
+        type: candidate.type,
+        status: "failed",
+        kind: "executed",
+        name: candidate.name,
+        command: candidate.command,
+        scope: candidate.scope,
+        summary: `Executed check failed to start: ${candidate.command}.`,
+        details: toErrorMessage(error),
+      });
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      const combinedOutput = trimOutput([stdout, stderr].filter(Boolean).join("\n"));
+
+      finish({
+        type: candidate.type,
+        status: code === 0 ? "passed" : "failed",
+        kind: "executed",
+        name: candidate.name,
+        command: candidate.command,
+        scope: candidate.scope,
+        summary:
+          code === 0
+            ? `Executed check passed: ${candidate.command} in ${candidate.scope}.`
+            : `Executed check failed: ${candidate.command} exited with code ${code ?? "unknown"}.`,
+        details: combinedOutput || undefined,
+      });
+    });
+  });
+}
+
+function summarizeVerificationEvidence(evidence: VerificationEvidence[]): string {
+  if (evidence.length === 0) {
+    return "Verification skipped: no allowlisted checks were configured.";
+  }
+
+  const counts = evidence.reduce(
+    (acc, item) => {
+      acc[item.kind] += 1;
+      acc[item.status] += 1;
+      return acc;
+    },
+    {
+      executed: 0,
+      recommended: 0,
+      passed: 0,
+      failed: 0,
+      warning: 0,
+      skipped: 0,
+    } as Record<VerificationEvidence["kind"] | VerificationEvidence["status"], number>,
+  );
+
+  return `Verification complete: ${counts.executed} executed, ${counts.recommended} recommended, ${counts.passed} passed, ${counts.failed} failed.`;
+}
+
+function trimOutput(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 3000) {
+    return trimmed;
+  }
+  return trimmed.slice(trimmed.length - 3000);
 }
 
 function redactSecrets(value: string): string {

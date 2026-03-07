@@ -11,6 +11,7 @@ import { generatePlanWithReliability, isOpenAIPlannerEnabled } from "@/lib/serve
 
 export interface GoalPlanOptions {
   goal: string;
+  requestedBy?: string;
   workspaceRoot?: string;
   branch?: string;
   activeFile?: string;
@@ -33,6 +34,7 @@ export interface GoalPlanResult {
 export async function generatePlanForGoal(options: GoalPlanOptions): Promise<GoalPlanResult> {
   const payload = generatePlanRequestSchema.parse({
     sessionId: options.sessionId ?? randomUUID(),
+    requestedBy: options.requestedBy?.trim() || undefined,
     prompt: options.goal.trim(),
     context: {
       workspaceRoot: options.workspaceRoot?.trim() || "workspace",
@@ -113,11 +115,18 @@ function toCompactPlan(goal: string, response: GeneratePlanResponse): Record<str
     commands: response.proposedCommands,
     required_dependencies: inferDependencies(response),
     touched_paths: response.changes.map((change) => change.path),
+    review_mode: response.review.mode,
+    review_rationale: response.review.rationale,
+    matched_policy_rules: response.review.matchedPolicyRules.map((rule) => ({
+      pattern: rule.pattern,
+      type: rule.type,
+      matched_paths: rule.matchedPaths,
+    })),
     changes: response.changes.map((change) => ({
       path: change.path,
       action: change.action,
     })),
-    risk_reasons: response.backendRisk.reasons,
+    risk_reasons: response.backendRisk.reasons.map((reason) => reason.message),
   };
 }
 

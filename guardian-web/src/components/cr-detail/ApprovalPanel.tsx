@@ -8,8 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApproval } from "@/hooks/useApproval";
 import { useIncidentMode } from "@/hooks/useIncidentMode";
+import { usePolicies } from "@/hooks/usePolicies";
 import { formatDateTime } from "@/lib/utils";
 import { CheckCircle, XCircle, MessageSquare, Users, Lock, AlertTriangle, Clock } from "lucide-react";
+import { useDemoActor } from "@/lib/demoActorClient";
 
 interface ApprovalPanelProps {
   cr: CR;
@@ -19,18 +21,33 @@ export function ApprovalPanel({ cr }: ApprovalPanelProps) {
   const [comment, setComment] = useState("");
   const { approve, reject, requestChanges } = useApproval(cr.id);
   const { isIncidentMode } = useIncidentMode();
+  const { data: policy } = usePolicies();
+  const { actor } = useDemoActor();
 
-  const needsDualApproval = cr.risk_level === "high";
+  const needsDualApproval = cr.required_approvals > 1;
   const canAct = cr.status === "pending_approval" || cr.status === "changes_requested";
+  const permissions = policy?.role_permissions.find((permission) => permission.role === actor.role);
+  const canApprove = permissions?.can_approve ?? false;
+  const canReject = permissions?.can_reject ?? false;
 
   const disabledReason = isIncidentMode
     ? "Approvals are suspended during Incident Mode"
+    : !canApprove
+    ? `Role ${actor.role} cannot approve`
+    : !canAct
+    ? "This CR is not in a state that accepts approvals"
+    : null;
+
+  const rejectDisabledReason = isIncidentMode
+    ? "Approvals are suspended during Incident Mode"
+    : !canReject
+    ? `Role ${actor.role} cannot reject or request changes`
     : !canAct
     ? "This CR is not in a state that accepts approvals"
     : null;
 
   const approveDisabled = !!disabledReason || approve.isPending;
-  const actDisabled = !!disabledReason || reject.isPending || requestChanges.isPending;
+  const actDisabled = !!rejectDisabledReason || reject.isPending || requestChanges.isPending;
 
   return (
     <Card>
@@ -83,6 +100,15 @@ export function ApprovalPanel({ cr }: ApprovalPanelProps) {
             </div>
           </div>
         )}
+
+        <div className="flex items-start gap-2 rounded-md border border-border bg-secondary/20 p-3 text-xs text-muted-foreground">
+          <Users className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            Acting as <span className="font-medium text-foreground">{actor.name}</span> ({actor.role}).
+            {canApprove ? " This role can approve." : " This role cannot approve."}
+            {canReject ? " It can reject or request changes." : " It cannot reject or request changes."}
+          </div>
+        </div>
 
         {/* Incident mode notice */}
         {isIncidentMode && (
@@ -140,8 +166,8 @@ export function ApprovalPanel({ cr }: ApprovalPanelProps) {
                     </Button>
                   </span>
                 </TooltipTrigger>
-                {disabledReason && (
-                  <TooltipContent>{disabledReason}</TooltipContent>
+                {rejectDisabledReason && (
+                  <TooltipContent>{rejectDisabledReason}</TooltipContent>
                 )}
               </Tooltip>
 
@@ -160,8 +186,8 @@ export function ApprovalPanel({ cr }: ApprovalPanelProps) {
                     </Button>
                   </span>
                 </TooltipTrigger>
-                {disabledReason && (
-                  <TooltipContent>{disabledReason}</TooltipContent>
+                {rejectDisabledReason && (
+                  <TooltipContent>{rejectDisabledReason}</TooltipContent>
                 )}
               </Tooltip>
             </div>

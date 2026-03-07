@@ -1,26 +1,32 @@
 {
-  "generatedAt": "2026-03-06T15:09:06.044Z",
+  "generatedAt": "2026-03-07T11:28:04.159Z",
   "rows": [
     {
-      "label": "Before (heuristic)",
-      "provider": "heuristic",
+      "label": "Before (baseline rules)",
+      "provider": "baseline",
       "metrics": {
         "schemaValidRate": 1,
-        "highRiskRecall": 0.75,
-        "approvalRecall": 0.75,
-        "reasonCoverage": 0.667,
-        "avgLatencyMs": 3
+        "highRiskRecall": 0.8,
+        "approvalRecall": 0.8,
+        "falsePositiveRate": 0,
+        "policyHitPrecision": 0.889,
+        "reasonCoverage": 0.333,
+        "explanationCompleteness": 0.611,
+        "avgLatencyMs": 1
       }
     },
     {
-      "label": "After (auto)",
-      "provider": "auto",
+      "label": "After (heuristic)",
+      "provider": "heuristic",
       "metrics": {
         "schemaValidRate": 1,
-        "highRiskRecall": 0.75,
-        "approvalRecall": 0.75,
-        "reasonCoverage": 0.667,
-        "avgLatencyMs": 497
+        "highRiskRecall": 1,
+        "approvalRecall": 1,
+        "falsePositiveRate": 0,
+        "policyHitPrecision": 1,
+        "reasonCoverage": 0.889,
+        "explanationCompleteness": 1,
+        "avgLatencyMs": 1
       }
     }
   ]

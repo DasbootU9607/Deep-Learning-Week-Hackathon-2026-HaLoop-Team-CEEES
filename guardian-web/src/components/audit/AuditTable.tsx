@@ -9,6 +9,9 @@ const ACTION_LABELS: Record<string, string> = {
   cr_rejected: "CR Rejected",
   cr_changes_requested: "Changes Requested",
   cr_applied: "CR Applied",
+  plan_generated: "Plan Generated",
+  auto_approved_low_risk: "Auto-Approved Low Risk",
+  approval_required_high_risk: "Approval Required",
   policy_updated: "Policy Updated",
   incident_mode_enabled: "Incident Enabled",
   incident_mode_disabled: "Incident Disabled",
@@ -20,6 +23,8 @@ const ACTION_LABELS: Record<string, string> = {
 const ACTION_COLORS: Record<string, string> = {
   cr_approved: "text-green-400",
   cr_rejected: "text-red-400",
+  auto_approved_low_risk: "text-green-300",
+  approval_required_high_risk: "text-yellow-300",
   incident_mode_enabled: "text-red-300 font-semibold",
   incident_mode_disabled: "text-blue-300",
   cr_changes_requested: "text-yellow-300",
@@ -68,7 +73,12 @@ export function AuditTable({ logs }: AuditTableProps) {
                       .map((n) => n[0])
                       .join("")}
                   </div>
-                  <span className="text-sm">{log.actor_name}</span>
+                  <div>
+                    <div className="text-sm">{log.actor_name}</div>
+                    {log.actor_role && (
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{log.actor_role}</div>
+                    )}
+                  </div>
                 </div>
               </td>
               <td className="px-4 py-3">

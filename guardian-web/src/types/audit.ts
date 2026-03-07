@@ -1,3 +1,5 @@
+import type { RoleType } from "@/types/policy";
+
 export type AuditAction =
   | "cr_created"
   | "cr_submitted"
@@ -5,6 +7,9 @@ export type AuditAction =
   | "cr_rejected"
   | "cr_changes_requested"
   | "cr_applied"
+  | "plan_generated"
+  | "auto_approved_low_risk"
+  | "approval_required_high_risk"
   | "policy_updated"
   | "incident_mode_enabled"
   | "incident_mode_disabled"
@@ -17,6 +22,7 @@ export interface AuditLog {
   timestamp: string;
   actor_id: string;
   actor_name: string;
+  actor_role?: RoleType;
   actor_avatar?: string;
   action: AuditAction;
   target_cr_id?: string;
