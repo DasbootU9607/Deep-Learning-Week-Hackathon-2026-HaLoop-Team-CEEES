@@ -40,16 +40,27 @@ If `code` is unavailable, launch the extension host manually from VS Code (`F5`)
 
 ## 3. Clone And Install
 
+Important:
+
+- Do not install the latest Prisma release for this project.
+- Use Prisma 6 only: `prisma@6` and `@prisma/client@6`.
+- Install Prisma and `openai` inside `guardian-web`, not at the repository root.
+- Run `npx prisma generate` before starting `guardian-web`.
+
 From repository root:
 
 ```bash
-cd guardian-web && npm ci
-cd ../ide-plugin && npm ci
+cd guardian-web
+npm ci
+npm install prisma@6 @prisma/client@6 openai
+npx prisma generate
+cd ../ide-plugin
+npm ci
 cd ..
-npm install @prisma/client
 ```
 
-This final command installs the local Prisma client dependency needed for the testbench flow.
+If dependency repair is needed later, rerun `npm install prisma@6 @prisma/client@6 openai` inside `guardian-web`.
+Do not run unpinned Prisma installs and do not run them from the repository root.
 
 ## 4. Start Backend And Dashboard
 
@@ -57,6 +68,7 @@ Terminal A:
 
 ```bash
 cd guardian-web
+npx prisma generate
 npm run dev
 ```
 
@@ -82,9 +94,10 @@ npm run build
 Then run extension host by either:
 
 1. VS Code manual path
-- Open `ide-plugin/` in VS Code
+- Open the repository root or `ide-plugin/` in VS Code
 - Press `F5`
-- Select `Extension` launch target
+- If you opened the repository root, select `Launch AI Gov Extension`
+- If you opened `ide-plugin/` directly, use the standard extension launch target
 
 2. CLI path
 
@@ -108,6 +121,7 @@ Add/update workspace settings:
 Notes:
 
 - `aiGov.backendUrl` can be `http://localhost:3000` or `http://localhost:3000/api`.
+- the extension now defaults to `http://localhost:3000`, which matches this testbench flow.
 - The plugin normalizes both forms automatically.
 
 ## 7. Run Automated Validation

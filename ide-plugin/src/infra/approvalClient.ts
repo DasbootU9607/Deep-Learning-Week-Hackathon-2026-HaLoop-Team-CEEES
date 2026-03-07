@@ -63,11 +63,18 @@ export class ApprovalClient {
     }
 
     const endpoint = `${backendUrl}/approvals`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify(request)
-    });
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(request)
+      });
+    } catch (error) {
+      throw new Error(
+        `Unable to reach AI Governance backend at ${endpoint}. Start guardian-web on ${backendUrl} or update aiGov.backendUrl. ${toErrorMessage(error)}`
+      );
+    }
 
     if (!response.ok) {
       throw new Error(`Create approval request failed at ${endpoint}: ${response.status} ${response.statusText}`);
@@ -185,10 +192,17 @@ export class ApprovalClient {
     }
 
     const endpoint = `${backendUrl}/approvals/${approvalId}/decision`;
-    const response = await fetch(endpoint, {
-      method: "GET",
-      headers: this.getHeaders()
-    });
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "GET",
+        headers: this.getHeaders()
+      });
+    } catch (error) {
+      throw new Error(
+        `Unable to reach AI Governance backend at ${endpoint}. Confirm guardian-web is still running on ${backendUrl}. ${toErrorMessage(error)}`
+      );
+    }
 
     if (response.status === 404 || response.status === 204) {
       return undefined;

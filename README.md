@@ -226,25 +226,39 @@ If `code` is unavailable, run extension host via VS Code `F5`.
 
 ## Install Dependencies
 
+Important for the backend demo path:
+
+- Do not install the latest Prisma release for this project.
+- Use Prisma 6 to match the `guardian-web` code and schema tooling.
+- Run the Prisma and `openai` installs inside `guardian-web`, not at the repository root.
+- Run `npx prisma generate` before starting `guardian-web`.
+
 ### macOS/Linux/Git Bash
 
 ```bash
-cd guardian-web && npm ci
-cd ../ide-plugin && npm ci
+cd guardian-web
+npm ci
+npm install prisma@6 @prisma/client@6 openai
+npx prisma generate
+cd ../ide-plugin
+npm ci
 cd ..
-npm install @prisma/client
 ```
 
 ### Windows PowerShell
 
 ```powershell
-Set-Location guardian-web; npm ci
-Set-Location ../ide-plugin; npm ci
+Set-Location guardian-web
+npm ci
+npm install prisma@6 @prisma/client@6 openai
+npx prisma generate
+Set-Location ../ide-plugin
+npm ci
 Set-Location ..
-npm install @prisma/client
 ```
 
-This final command installs the local Prisma client dependency needed for the full setup flow.
+If you need to repair dependencies manually, use `npm install prisma@6 @prisma/client@6 openai` inside `guardian-web`.
+Do not run `npm install prisma` or `npm install @prisma/client` without the `@6` version pin, and do not run those installs from the repository root.
 
 ## Run Locally
 
@@ -262,6 +276,7 @@ This launches `guardian-web`, `guardian-worker`, `postgres`, and `redis`.
 
 ```bash
 cd guardian-web
+npx prisma generate
 npm run dev
 ```
 
@@ -297,6 +312,7 @@ npm run build
 - `http://localhost:3000/api`
 
 The plugin normalizes both.
+For the demo flow it now defaults to `http://localhost:3000`, so you only need to set this explicitly if you want to override it.
 
 ## SQLite Backend Mirror
 

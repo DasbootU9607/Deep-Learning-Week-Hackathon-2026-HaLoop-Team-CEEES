@@ -110,7 +110,10 @@ pyrightconfig.json
 .mypy_cache/
 
 # VS Code
-.vscode/
+.vscode/*
+!.vscode/
+!.vscode/launch.json
+!.vscode/tasks.json
 
 # Ergonomica editor
 .ergonomica/

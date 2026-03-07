@@ -3,6 +3,7 @@ import path from "node:path";
 type MockUri = { fsPath: string };
 
 const files = new Map<string, Uint8Array>();
+const configuration = new Map<string, unknown>();
 
 function normalizeFsPath(filePath: string): string {
   return path.normalize(filePath).replace(/\\/g, "/");
@@ -45,6 +46,15 @@ export const workspace = {
 
   async saveAll(_includeUntitled?: boolean): Promise<boolean> {
     return true;
+  },
+
+  getConfiguration(section?: string): { get: <T>(key: string) => T | undefined } {
+    return {
+      get<T>(key: string): T | undefined {
+        const fullKey = section ? `${section}.${key}` : key;
+        return configuration.get(fullKey) as T | undefined;
+      }
+    };
   }
 };
 
@@ -66,4 +76,12 @@ export function __getMockTextFile(filePath: string): string | undefined {
 
 export function __hasMockFile(filePath: string): boolean {
   return files.has(normalizeFsPath(filePath));
+}
+
+export function __setMockConfigurationValue(key: string, value: unknown): void {
+  configuration.set(key, value);
+}
+
+export function __resetMockConfiguration(): void {
+  configuration.clear();
 }

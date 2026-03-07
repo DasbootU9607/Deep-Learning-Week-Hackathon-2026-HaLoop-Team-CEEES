@@ -5,9 +5,12 @@ type LoggerLike = {
   warn: (message: string) => void;
 };
 
-const DEFAULT_CANDIDATES = ["http://localhost:3000", "http://127.0.0.1:3000"];
+export const DEFAULT_BACKEND_URL = "http://localhost:3000";
+
+const DEFAULT_CANDIDATES = [DEFAULT_BACKEND_URL, "http://127.0.0.1:3000"];
 const PROBE_PATH = "/api/incident";
-const PROBE_TIMEOUT_MS = 1200;
+// Next.js dev routes can take a few seconds to warm up on first request.
+const PROBE_TIMEOUT_MS = 5000;
 
 let cachedResolvedBackendUrl: string | undefined;
 
@@ -52,6 +55,10 @@ export async function resolveBackendUrl(logger?: LoggerLike): Promise<string> {
   }
 
   return "";
+}
+
+export function resetResolvedBackendUrlCacheForTests(): void {
+  cachedResolvedBackendUrl = undefined;
 }
 
 function collectCandidates(): string[] {

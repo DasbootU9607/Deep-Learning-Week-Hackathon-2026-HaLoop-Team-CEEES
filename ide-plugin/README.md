@@ -66,6 +66,7 @@ Set these in workspace settings (extension host window):
 Notes:
 
 - `aiGov.backendUrl` accepts `http://localhost:3000` or `http://localhost:3000/api`.
+- by default the extension points to `http://localhost:3000`, which matches the planned demo/testbench flow.
 - if `aiGov.backendUrl` is empty, plugin tries local auto-detection.
 - if backend is unreachable, plugin can fall back to local simulated approval.
 

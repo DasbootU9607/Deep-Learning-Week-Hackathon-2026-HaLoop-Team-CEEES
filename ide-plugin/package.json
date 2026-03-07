@@ -36,8 +36,8 @@
       "properties": {
         "aiGov.backendUrl": {
           "type": "string",
-          "default": "",
-          "description": "Backend base URL for plan generation and approvals."
+          "default": "http://localhost:3000",
+          "description": "Backend base URL for plan generation and approvals. Defaults to the local Guardian Web demo server."
         },
         "aiGov.apiKey": {
           "type": "string",

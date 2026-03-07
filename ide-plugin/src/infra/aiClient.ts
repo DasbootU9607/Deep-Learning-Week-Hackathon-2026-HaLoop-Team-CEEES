@@ -16,14 +16,21 @@ export class AIClient {
     }
 
     const endpoint = `${backendUrl}/generate-plan`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
-      },
-      body: JSON.stringify(request)
-    });
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+        },
+        body: JSON.stringify(request)
+      });
+    } catch (error) {
+      throw new Error(
+        `Unable to reach AI Governance backend at ${endpoint}. Start guardian-web on ${backendUrl} or update aiGov.backendUrl. ${toErrorMessage(error)}`
+      );
+    }
 
     if (!response.ok) {
       throw new Error(`Generate plan failed at ${endpoint}: ${response.status} ${response.statusText}`);
