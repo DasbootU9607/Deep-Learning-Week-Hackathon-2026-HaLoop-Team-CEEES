@@ -185,6 +185,7 @@ If `code` is unavailable, run extension host via VS Code `F5`.
 cd guardian-web && npm ci
 cd ../ide-plugin && npm ci
 cd ..
+npm install @prisma/client
 ```
 
 ### Windows PowerShell
@@ -193,7 +194,10 @@ cd ..
 Set-Location guardian-web; npm ci
 Set-Location ../ide-plugin; npm ci
 Set-Location ..
+npm install @prisma/client
 ```
+
+This final command installs the local Prisma client dependency needed for the full setup flow.
 
 ## Run Locally
 
