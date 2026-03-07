@@ -115,6 +115,11 @@ pyrightconfig.json
 # Ergonomica editor
 .ergonomica/
 
+# Root-level Node.js artifacts used for local Prisma setup
+/node_modules/
+/package.json
+/package-lock.json
+
 # temporary files
 *.swp
 *~

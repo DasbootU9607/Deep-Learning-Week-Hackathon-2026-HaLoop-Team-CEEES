@@ -46,7 +46,10 @@ From repository root:
 cd guardian-web && npm ci
 cd ../ide-plugin && npm ci
 cd ..
+npm install @prisma/client
 ```
+
+This final command installs the local Prisma client dependency needed for the testbench flow.
 
 ## 4. Start Backend And Dashboard
 
