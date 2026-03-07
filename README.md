@@ -22,6 +22,32 @@ Module-specific details live in:
 - `guardian-web/README.md`
 - `ide-plugin/README.md`
 
+## Governance Highlights
+
+### Review Modes
+
+| Mode | Trigger | What it enables |
+| --- | --- | --- |
+| `auto_approved` | score `< auto_approve_below` and all guardrails pass | safe fast path for trivial changes without reviewer wait time |
+| `warning` | moderate risk, but no protected-path, secret, or destructive-command guardrail hit | visible caution with full rationale while still allowing progress |
+| `approval_required` | high risk, protected path, destructive command, or secret signal | human approval gate before code can be applied |
+| `blocked` | deny rule matched | hard stop for unsafe classes of changes such as direct production infra edits |
+
+### New In This Version
+
+- Explainable review decisions: plans now return `review.mode`, rationale lines, matched policy rules, and guardrail pass/fail signals. The plugin and dashboard both show "Why this decision happened" with local, backend, and final risk context.
+- Defensible low-risk automation: the backend only auto-approves when the score is below the configured threshold and no destructive commands, protected paths, secret detections, large blast radius, or oversized diffs are present.
+- Real RBAC and dual approval: dashboard actions now use authenticated demo actors, scores at or above the default `require_dual_approval_above=85` threshold need two distinct reviewers, and audit logs record the actual actor identity and role.
+- Executed verification evidence: the plugin runs allowlisted repo checks when available and attaches the results to the CR so reviewers see executed `lint` and `test` evidence instead of placeholders.
+- Runtime posture visibility: the dashboard now shows whether the service is running in `demo` or `prod`, whether the async queue is enabled, and which datastore is active.
+
+### What This Enables
+
+- Faster demos and safer day-to-day use because small changes can move immediately with an audit trail explaining why.
+- Enterprise-style governance because approvals, policy edits, and incident mode actions now enforce role boundaries instead of trusting free-form names.
+- More trustworthy review conversations because reviewers can see the exact risky path, command, guardrail miss, and verification evidence behind each decision.
+- Cleaner operational storytelling because the runtime card makes it obvious whether the team is demonstrating the lightweight demo stack or the full production path.
+
 ## Documentation Map
 
 - `README.md`: canonical cross-platform setup + run
@@ -314,6 +340,23 @@ npm run build
 The plugin normalizes both.
 For the demo flow it now defaults to `http://localhost:3000`, so you only need to set this explicitly if you want to override it.
 
+## Demo Actors And Auth
+
+Guardian Web includes a dashboard actor switcher for demo mode. The same identities can be used directly against mutating APIs with `Authorization: Bearer <token>`.
+
+| Actor | Bearer token | Role | Effective permissions |
+| --- | --- | --- | --- |
+| Avery Admin | `haloop-admin-token` | `admin` | approve, reject, edit policy, toggle incident mode |
+| Lina Lead | `haloop-lead-token` | `lead` | approve, reject, edit policy, toggle incident mode |
+| Devon Developer | `haloop-developer-token` | `developer` | approve only |
+| Vera Viewer | `haloop-viewer-token` | `viewer` | read-only |
+
+Notes:
+
+- The dashboard actor switcher is the fastest way to demonstrate RBAC live.
+- API mutations now authenticate the actor and no longer trust free-form reviewer names in the request body.
+- By default, scores `>= 85` require two distinct approvers before a CR becomes fully approved.
+
 ## SQLite Backend Mirror
 
 Initialized automatically by `guardian-web`.
@@ -342,8 +385,16 @@ Reference schema: `sqlite/migrations/0001_init.sql`
 
 - `POST /api/ai/plan`
 - `POST /api/approvals`
+- `GET /api/runtime`
+- `GET /api/cr`
+- `GET /api/cr/:id`
+- `POST /api/cr/:id/approve`
+- `POST /api/cr/:id/reject`
+- `POST /api/cr/:id/request-changes`
 - `GET /api/audit`
 - `GET /api/audit?view=compact`
+- `PUT /api/policy/path-rules`
+- `PUT /api/incident`
 
 ## Validation Commands
 
@@ -353,6 +404,7 @@ Reference schema: `sqlite/migrations/0001_init.sql`
 cd guardian-web
 npm run lint
 npm run build
+npm run eval:gate
 ```
 
 ### ide-plugin
@@ -374,9 +426,16 @@ BASE_URL=http://localhost:3000 npm run test:integration
 
 ## Reset State
 
-Reset SQLite mirror:
+Reset demo-mode storage:
 
+- delete `guardian-web/.data/integration-store.json`
 - delete `guardian-web/.data/backend-mirror.sqlite`
+- delete `guardian-web/.data/backend-mirror.sqlite-wal`
+- delete `guardian-web/.data/backend-mirror.sqlite-shm`
+
+On the next request in `BACKEND_MODE=demo`, Guardian Web recreates fresh seeded state and a new SQLite mirror automatically.
+
+For `BACKEND_MODE=prod`, persistent state lives in Postgres through the `postgres-data` Docker volume declared in `docker-compose.yml`.
 
 ## Troubleshooting
 
